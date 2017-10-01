@@ -1,0 +1,2 @@
+MAX_X_GRID = 29
+MAX_Y_GRID = 19
