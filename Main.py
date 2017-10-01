@@ -1,25 +1,36 @@
 import threading
 from GameFrame import GameFrame
 from GameEngine import GameEngine
+from RandomBot import RandomBot
+from time import sleep
 
-
-NB_PLAYERS = 3
+NB_PLAYERS = 2
 
 def game_loop(engine, main_frame):
-    while engine.is_game_playing():
-        engine.update()
+    while main_frame.is_running():
+
+        if engine.is_game_playing():
+            engine.update()
+
+            for i in range(NB_PLAYERS):
+                print(str(i) + ': ' + str(engine.cycles_positions[i]), flush=True)
+        else:
+            main_frame.display_game_over()
 
         main_frame.refresh()
         main_frame.update_idletasks()
         main_frame.update()
 
-        for i in range(NB_PLAYERS):
-            print(str(i) + ': ' + str(engine.cycles_positions[i]), flush=True)
+        sleep(0.5)
 
 if __name__ == "__main__":
     engine = GameEngine(NB_PLAYERS)
+
+    players = []
+    for i in range(NB_PLAYERS):
+        players.append(RandomBot())
     main_frame = GameFrame(engine)
 
-    engine.initialize()
+    engine.initialize(players)
     main_frame.initialize()
     game_loop(engine, main_frame)
