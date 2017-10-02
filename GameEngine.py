@@ -1,6 +1,7 @@
 import Configuration
 from random import randint
 from numpy import ones, zeros
+from time import time
 
 class GameEngine:
     def __init__(self, nb_players):
@@ -11,6 +12,7 @@ class GameEngine:
         self.current_nb_players = nb_players
         self.players_game_over = []
         self.players = []
+        self.walls = {}
 
     def initialize(self, players):
         for i in range(self.nb_players):
@@ -22,6 +24,7 @@ class GameEngine:
             self.initial_cycles_positions.append((x,y))
             self.players_game_over.append(False)
             self.players.append(players[i])
+            self.walls[i] = [(x,y)]
 
     def update(self):
         for i in range(self.nb_players):
@@ -39,7 +42,10 @@ class GameEngine:
                         input += str(self.initial_cycles_positions[j][0]) + ' ' + str(self.initial_cycles_positions[j][1]) + ' '
                         input += str(self.cycles_positions[j][0]) + ' ' + str(self.cycles_positions[j][1]) + '\n'
 
+                start = time()
                 direction = self.players[i].compute_direction(input)
+                print(str(i) + ': ' + str((time() - start)*1000), flush=True)
+
                 if direction == 'LEFT': new_x -= 1
                 elif direction == 'RIGHT': new_x += 1
                 elif direction == 'UP': new_y -= 1
@@ -49,6 +55,7 @@ class GameEngine:
 
                 if 0 <= new_x <= Configuration.MAX_X_GRID and 0 <= new_y <= Configuration.MAX_Y_GRID and self.area[new_x, new_y]:
                     self.cycles_positions[i] = (new_x, new_y)
+                    self.walls[i].append((new_x, new_y))
                     self.area[new_x, new_y]= False
                 else:
                     is_game_over = True
@@ -56,6 +63,10 @@ class GameEngine:
                 if is_game_over:
                     self.current_nb_players -= 1
                     self.players_game_over[i] = True
+
+                    #Free space
+                    for wall in self.walls[i]:
+                        self.area[wall[0], wall[1]] = True
 
     def is_game_playing(self):
         return self.current_nb_players > 1

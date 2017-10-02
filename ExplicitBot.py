@@ -31,7 +31,6 @@ def compute_voronoi(cycles, list_players):
 
     return voronoi_cells
 
-
 def process_availables_spaces(free_map, root, player_pos=None):
     nb_spaces = 0
     front_nodes = deque()
@@ -76,13 +75,14 @@ class ExplicitBot(Bot):
 
         self.list_players = []
         self.list_players_without_me = []
-        self.free_cases = 600
         self.turn = 0
 
     def compute_direction(self, input):
 
-        splitted = input.split('\n')
+        self.list_players.clear()
+        self.list_players_without_me.clear()
 
+        splitted = input.split('\n')
         nb_players, my_index = [int(i) for i in splitted[0].split()]
 
         if self.turn == 0:
@@ -105,23 +105,20 @@ class ExplicitBot(Bot):
                 if self.turn == 0:
                     self.wall_cycles[i] = [(x0, y0)]
                     self.free_map[x0, y0] = False
-                    self.free_cases -= 1
 
                 self.wall_cycles[i].append((x1, y1))
                 self.free_map[x1, y1] = False
-                self.free_cases -= 1
             else:
                 # If player has lost, remove his wall from the game
                 if i in self.cur_cycles:
                     for case in self.wall_cycles[i]:
                         self.free_map[case] = True
-                        self.free_cases += 1
 
                     del self.cur_cycles[i]
                     del self.wall_cycles[i]
 
-                    self.list_players.remove(i)
-                    self.list_players_without_me.remove(i)
+                self.list_players.remove(i)
+                self.list_players_without_me.remove(i)
 
         init_voronoi_cells = compute_voronoi(self.cur_cycles, self.list_players)
 

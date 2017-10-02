@@ -1,7 +1,85 @@
 import numpy
+import Configuration
+from math import sqrt, ln
 from Bot import Bot
 from collections import deque
 from numpy import ones, copy
+
+SELECT_CONSTANT = 10 #value from the paper
+
+class Node:
+    def __init__(self, parent, value):
+        self.score = 0
+        self.number_visit = 0
+        self.children = []
+        self.parent = parent
+
+
+        if parent is None:
+            self.depth = 0
+            self.value = [value]
+        else:
+            self.value = self.parent.value.extend([value])
+            self.depth = parent.depth + 1
+
+    def add_child(self, value):
+        self.children.append(Node(self, value))
+
+    def back_propagate(self, value):
+        '''
+        Back propagate the result of the simulation in the branch to the root node
+        :param value: 1 if it was a win, 0 for a loss
+        '''
+        self.score += value
+        self.number_visit += 1
+
+        if self.parent is not None:
+            self.parent.back_propagate(value)
+
+    def selection(self):
+        '''
+        selection of the node that will be extended at this iteration
+        :return: Nodes
+        '''
+        node = self.select_node()
+        if len(node.children) > 0:
+            node = self.selection()
+        else:
+            return node
+
+    def select_node(self):
+        '''
+        selection of the next visited nodes for the next extension
+        :return: Node
+        '''
+
+        max_selection_score = 0
+        selected_node = None
+        for node in self.children:
+            selection_score = node.score + SELECT_CONSTANT * sqrt(ln(self.number_visit) / self.node.number_visit)
+
+            if selection_score > max_selection_score:
+                max_selection_score = selection_score
+                selected_node = node
+
+        return selected_node
+
+    def initialize_play_out(self, list_players, my_index):
+        '''
+        Initialize the area with the previous positions of each cycles
+        '''
+
+        area = ones(Configuration.MAX_X_GRID + 1, Configuration.MAX_Y_GRID + 1)
+        for nb_turn, my_position in enumerate(self.value):
+            for player in list_players:
+                if player == my_index:
+                    area[my_position] = False
+                else:
+                    position = self.process_random_position(area, previous_position, current_position)
+
+               #TODO: finish the code of the play out initialization
+
+        return area
 
 class MCTSBot():
     def __init__(self):

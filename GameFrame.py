@@ -39,15 +39,19 @@ class GameFrame(Tk):
         Draw the modifications on the screen
         '''
 
-        for index, position in enumerate(self.engine.cycles_positions):
-            # Initialize cycle with 1 rectangle at its current position
-            x0 = position[0] * X_GRID_OFFSET
-            y0 = position[1] * Y_GRID_OFFSET
-            x1 = position[0] * X_GRID_OFFSET + X_GRID_OFFSET
-            y1 = position[1] * Y_GRID_OFFSET + Y_GRID_OFFSET
-            tag_rect = 'rect' + str(index)
+        for index_cycle, wall in self.engine.walls.items():
+            for position in wall:
+                # Initialize cycle with 1 rectangle at its current position
+                x0 = position[0] * X_GRID_OFFSET
+                y0 = position[1] * Y_GRID_OFFSET
+                x1 = position[0] * X_GRID_OFFSET + X_GRID_OFFSET
+                y1 = position[1] * Y_GRID_OFFSET + Y_GRID_OFFSET
 
-            self.canvas.create_rectangle(x0, y0, x1, y1, outline='black', fill=COLORS[index])
+                if self.engine.players_game_over[index_cycle]:
+                    color = 'black'
+                else:
+                    color = COLORS[index_cycle]
+                self.canvas.create_rectangle(x0, y0, x1, y1, outline='black', fill=color)
 
     def display_game_over(self):
         self.title("Game Over!")
