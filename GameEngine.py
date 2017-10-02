@@ -6,6 +6,7 @@ class GameEngine:
     def __init__(self, nb_players):
         self.nb_players = nb_players
         self.cycles_positions = []
+        self.initial_cycles_positions = []
         self.area = ones((Configuration.MAX_X_GRID+1, Configuration.MAX_Y_GRID+1), dtype=bool)
         self.current_nb_players = nb_players
         self.players_game_over = []
@@ -18,9 +19,8 @@ class GameEngine:
                 x = randint(0, Configuration.MAX_X_GRID)
                 y = randint(0, Configuration.MAX_Y_GRID)
             self.cycles_positions.append((x,y))
+            self.initial_cycles_positions.append((x,y))
             self.players_game_over.append(False)
-
-            players[i].initialize(self.cycles_positions[len(self.players)])
             self.players.append(players[i])
 
     def update(self):
@@ -31,7 +31,15 @@ class GameEngine:
                 new_x = self.cycles_positions[i][0]
                 new_y = self.cycles_positions[i][1]
 
-                direction = self.players[i].compute_direction()
+                input = str(self.nb_players) + ' ' + str(i) + '\n'
+                for j in range(self.nb_players):
+                    if self.players_game_over[j]:
+                        input += '-1 -1 -1 -1\n'
+                    else:
+                        input += str(self.initial_cycles_positions[j][0]) + ' ' + str(self.initial_cycles_positions[j][1]) + ' '
+                        input += str(self.cycles_positions[j][0]) + ' ' + str(self.cycles_positions[j][1]) + '\n'
+
+                direction = self.players[i].compute_direction(input)
                 print('direction = ' + direction, flush=True)
                 if direction == 'LEFT': new_x -= 1
                 elif direction == 'RIGHT': new_x += 1

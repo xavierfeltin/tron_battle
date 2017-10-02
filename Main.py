@@ -2,9 +2,10 @@ import threading
 from GameFrame import GameFrame
 from GameEngine import GameEngine
 from RandomBot import RandomBot
+from ExplicitBot import ExplicitBot
 from time import sleep
 
-NB_PLAYERS = 2
+NB_PLAYERS = 3
 
 def game_loop(engine, main_frame):
     while main_frame.is_running():
@@ -28,7 +29,8 @@ if __name__ == "__main__":
 
     players = []
     for i in range(NB_PLAYERS):
-        players.append(RandomBot())
+        players.append(ExplicitBot())
+
     main_frame = GameFrame(engine)
 
     engine.initialize(players)

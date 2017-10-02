@@ -1,6 +1,7 @@
 import Configuration
 from Bot import Bot
 from random import randint
+from numpy import ones
 
 class RandomBot(Bot):
 
@@ -8,45 +9,39 @@ class RandomBot(Bot):
         Bot.__init__(self)
         self.position = (-1,-1)
         self.previous_position = (-1,-1)
+        self.area = ones((Configuration.MAX_X_GRID+1, Configuration.MAX_Y_GRID+1), dtype=bool)
 
-    def compute_direction(self):
-        direction = ''
-        is_back = True
-        while is_back:
-            new_x = self.position[0]
-            new_y = self.position[1]
+    def compute_direction(self, input):
 
-            way = randint(0, 1)
-            if way:
-                offset = 1
-            else:
-                offset = -1
+        splitted = input.split('\n')
 
-            orientation = randint(0, 1)
-            if orientation:
-                new_x = new_x + offset
-                if new_x < 0:
-                    new_x = 0
-                elif new_x > Configuration.MAX_X_GRID:
-                    new_x = Configuration.MAX_X_GRID
-            else:
-                new_y = new_y + offset
-                if new_y < 0:
-                    new_y = 0
-                elif new_y > Configuration.MAX_Y_GRID:
-                    new_y = Configuration.MAX_Y_GRID
+        nb_players, my_index = [int(i) for i in splitted[0].split()]
+        for i in range(nb_players):
+            # x0: starting X coordinate of lightcycle (or -1)
+            # y0: starting Y coordinate of lightcycle (or -1)
+            # x1: starting X coordinate of lightcycle (can be the same as X0 if you play before this player)
+            # y1: starting Y coordinate of lightcycle (can be the same as Y0 if you play before this player)
+            x0, y0, x1, y1 = [int(j) for j in splitted[i+1].split()]
 
-            print('new position: ' + str(new_x) + ', ' + str(new_y), flush=True)
+            if i == my_index:
+                self.position = (x1,y1)
 
-            if new_x - self.position[0] > 0: direction = 'RIGHT'
-            elif new_x - self.position[0] < 0: direction = 'LEFT'
-            elif new_y - self.position[1] > 0: direction = 'DOWN'
-            elif new_y - self.position[1] < 0: direction = 'UP'
-            else: direction = ''
+            self.area[x0, y0] = False
+            self.area[x1, y1] = False
 
-            is_back = new_x == self.previous_position[0] and new_y == self.previous_position[1]
+        offsets = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+        possibilities = []
+        for offset in offsets:
+            new_x = self.position[0] + offset[0]
+            new_y = self.position[1] + offset[1]
+            if 0 <= new_x <= Configuration.MAX_X_GRID and 0 <= new_y <= Configuration.MAX_Y_GRID and self.area[new_x, new_y]:
+                if new_x - self.position[0] > 0: possibilities.append('RIGHT')
+                elif new_x - self.position[0] < 0: possibilities.append('LEFT')
+                elif new_y - self.position[1] > 0: possibilities.append('DOWN')
+                elif new_y - self.position[1] < 0: possibilities.append('UP')
 
-        self.previous_position = (self.position[0], self.position[1])
-        self.position = (new_x, new_y)
-
-        return direction
+        if len(possibilities) > 0:
+            rand = randint(0, len(possibilities)-1)
+            return possibilities[rand]
+        else:
+            return ''

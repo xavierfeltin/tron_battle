@@ -7,5 +7,5 @@ class Bot():
         self.position = position
         self.wall.append(position)
 
-    def compute_direction(self):
+    def compute_direction(self, input):
         pass
