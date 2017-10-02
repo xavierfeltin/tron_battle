@@ -40,21 +40,18 @@ class GameEngine:
                         input += str(self.cycles_positions[j][0]) + ' ' + str(self.cycles_positions[j][1]) + '\n'
 
                 direction = self.players[i].compute_direction(input)
-                print('direction = ' + direction, flush=True)
                 if direction == 'LEFT': new_x -= 1
                 elif direction == 'RIGHT': new_x += 1
                 elif direction == 'UP': new_y -= 1
                 elif direction == 'DOWN': new_y += 1
                 else: #bad input => game over
                     is_game_over = True
-                    print(str(i) + ' bad input', flush=True)
 
                 if 0 <= new_x <= Configuration.MAX_X_GRID and 0 <= new_y <= Configuration.MAX_Y_GRID and self.area[new_x, new_y]:
                     self.cycles_positions[i] = (new_x, new_y)
                     self.area[new_x, new_y]= False
                 else:
                     is_game_over = True
-                    print(str(i) + ' out of bounds or hit wall', flush=True)
 
                 if is_game_over:
                     self.current_nb_players -= 1

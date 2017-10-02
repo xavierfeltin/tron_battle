@@ -1,8 +1,5 @@
-import Configuration
-import sys
 import numpy
 from Bot import Bot
-from random import randint
 from collections import deque
 from numpy import ones, copy
 
@@ -126,8 +123,6 @@ class ExplicitBot(Bot):
                     self.list_players.remove(i)
                     self.list_players_without_me.remove(i)
 
-        print('Free cases : ' + str(self.free_cases), file=sys.stderr, flush=True)
-
         init_voronoi_cells = compute_voronoi(self.cur_cycles, self.list_players)
 
         available_directions = [(0, -1), (0, 1), (-1, 0), (1, 0)]
@@ -159,13 +154,10 @@ class ExplicitBot(Bot):
         max_voronoi = init_voronoi_cells[my_index]
         best_worst_voronoi = 0
 
-        print('Dir. av.: ' + str(len(available_directions)) + ', V. init: ' + str(init_voronoi_cells[my_index]), file=sys.stderr, flush=True)
-
         for direction in available_directions:
             new_x = self.cur_cycles[my_index][0] + direction[0]
             new_y = self.cur_cycles[my_index][1] + direction[1]
 
-            print('direction: ' + str(direction) + ', free: ' + str(self.free_map[new_x, new_y]), file=sys.stderr, flush=True)
             if self.free_map[new_x, new_y]:
                 new_cycles[my_index] = (new_x, new_y)
                 nb_cases = process_availables_spaces(self.free_map, (new_x, new_y))
@@ -181,11 +173,7 @@ class ExplicitBot(Bot):
                     for i in self.list_players_without_me:
                         min_ennemy_cases += process_availables_spaces(self.free_map, self.cur_cycles[i], (new_x, new_y))
 
-                    print('New Direction !, No cases ' + str((new_x, new_y)) + ': ' + str(nb_cases), file=sys.stderr,
-                          flush=True)
-
                 elif nb_cases == max_nb_cases:
-
                     ennemy_cases = 0
                     for i in self.list_players_without_me:
                         ennemy_cases += process_availables_spaces(self.free_map, self.cur_cycles[i], (new_x, new_y))
@@ -194,25 +182,11 @@ class ExplicitBot(Bot):
                         min_ennemy_cases = ennemy_cases
                         new_voronoi_cells = compute_voronoi(new_cycles, self.list_players)
                         max_voronoi = new_voronoi_cells[my_index]
-                        print('New Direction !, Ennemy ' + str((new_x, new_y)) + ': ' + str(min_ennemy_cases),
-                              file=sys.stderr, flush=True)
                     elif ennemy_cases == min_ennemy_cases:
                         new_voronoi_cells = compute_voronoi(new_cycles, self.list_players)
                         if new_voronoi_cells[my_index] >= max_voronoi:
                             max_voronoi = new_voronoi_cells[my_index]
                             new_direction = direction
-                            print('New Direction !, Voronoi ' + str((new_x, new_y)) + ': ' + str(max_voronoi),
-                                  file=sys.stderr, flush=True)
-                        else:
-                            print('Lower Voronoi ' + str((new_x, new_y)) + ': ' + str(
-                                new_voronoi_cells[my_index]) + ', max: ' + str(max_voronoi), file=sys.stderr, flush=True)
-                    else:
-                        print('Upper ennemy ' + str((new_x, new_y)) + ': ' + str(ennemy_cases) + ', min: ' + str(
-                            min_ennemy_cases), file=sys.stderr, flush=True)
-
-                else:
-                    print('Lower no cases ' + str((new_x, new_y)) + ': ' + str(nb_cases) + ', max: ' + str(max_nb_cases),
-                          file=sys.stderr, flush=True)
 
         # A single line with UP, DOWN, LEFT or RIGHT
         if new_direction == (0, 1):
