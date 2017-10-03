@@ -6,7 +6,7 @@ from ExplicitBot import ExplicitBot
 from MCTSBot import MCTSBot
 from time import sleep
 
-NB_PLAYERS = 4
+NB_PLAYERS = 2
 
 def game_loop(engine, main_frame):
     while main_frame.is_running():

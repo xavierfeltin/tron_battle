@@ -7,7 +7,7 @@ from Bot import Bot
 from collections import deque
 from numpy import ones, copy
 
-SELECT_CONSTANT = 10 #value from the paper
+SELECT_CONSTANT = 1.414213 #value from Wikipedia
 NB_TURNS_CHECK = 5 #value from the paper
 A = 1 #value from the paper
 NB_MCTS_ITERATIONS = 800 #experimental
@@ -15,7 +15,8 @@ NB_MCTS_ITERATIONS = 800 #experimental
 
 class Node:
     def __init__(self, parent, value):
-        self.score = 0
+        self.score = 0.0
+        self.nb_win = 0
         self.number_visit = 1
         self.children = []
         self.parent = parent
@@ -36,7 +37,9 @@ class Node:
         Back propagate the result of the simulation in the branch to the root node
         :param value: 1 if it was a win, 0 for a loss
         '''
-        if value: self.score += 1
+        if value:
+            self.nb_win += 1
+            self.score = self.nb_win / self.number_visit
         self.number_visit += 1
 
         if self.parent is not None:
@@ -50,8 +53,8 @@ class Node:
         node = self.select_node()
         if len(node.children) > 0:
             node = node.selection()
-        else:
-            return node
+
+        return node
 
     def select_node(self):
         '''
@@ -59,14 +62,14 @@ class Node:
         :return: Node
         '''
 
-        max_selection_score = 0
+        max_selection_score = None
         selected_node = None
 
         if len(self.children) > 0:
             for node in self.children:
                 selection_score = node.score + SELECT_CONSTANT * sqrt(log(self.number_visit) / node.number_visit)
 
-                if selection_score >= max_selection_score:
+                if max_selection_score is None or selection_score > max_selection_score:
                     max_selection_score = selection_score
                     selected_node = node
 
@@ -130,13 +133,14 @@ class Node:
         else:
             return (1,0) #return nevertheless a valid position
 
-    def play_out(self, context_area, current_positions, players, my_index):
+    def play_out(self, context_area, current_positions, list_players, my_index):
          '''
          Play the simulation
          :return:  True if wins, False otherwise
          '''
          is_game_running = True
          is_win = True
+         players = list_players[:]
          area, walls = self.initialize_play_out(context_area, current_positions, players, my_index)
 
          players_game_over = []
@@ -158,6 +162,7 @@ class Node:
 
             for player in players_game_over:
                 players.remove(player)
+                players_game_over.remove(player)
                 if player == my_index: #can stop the simulation here
                     is_game_running = False
                     is_win = False
