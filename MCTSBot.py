@@ -106,7 +106,7 @@ class Node:
                     area[self.value[index]] = False
                     walls[player].append(self.value[index])
                 else:
-                    position = self.process_random_position(area, current_positions[player])
+                    position = self.process_random_position(area, walls[player][-1])
                     area[position] = False
                     walls[player].append(position)
 
@@ -131,9 +131,9 @@ class Node:
         if len(possibilities) > 0:
             return possibilities[randint(0, len(possibilities) - 1)]
         else:
-            return (1,0) #return nevertheless a valid position
+            return current_position #return nevertheless a valid position
 
-    def play_out(self, context_area, current_positions, list_players, my_index):
+    def play_out(self, context_area, initial_positions, list_players, my_index):
          '''
          Play the simulation
          :return:  True if wins, False otherwise
@@ -141,7 +141,7 @@ class Node:
          is_game_running = True
          is_win = True
          players = list_players[:]
-         area, walls = self.initialize_play_out(context_area, current_positions, players, my_index)
+         area, walls = self.initialize_play_out(context_area, initial_positions, players, my_index)
 
          players_game_over = []
          nb_turns_check_separeted = NB_TURNS_CHECK
@@ -149,7 +149,7 @@ class Node:
          while is_game_running:
             #Start next step of the game
             for player in players:
-                position = self.process_random_position(area, current_positions[player])
+                position = self.process_random_position(area, walls[player][-1])
 
                 if area[position]:
                     area[position] = False
@@ -180,23 +180,25 @@ class Node:
                 turn += 1
          return is_win, turn
 
-    def expansion(self):
+    def expansion(self, context_area):
         '''
         Create the next turn of the game
+        Forbid to add a previous move done by the player in the tree
+        and done by all players in previous simulation step
         '''
 
-        last_position = self.value[len(self.value)-1]
+        last_position = self.value[-1]
 
-        if len(self.value) > 2: previous_position = self.value[len(self.value)-2]
-        else: previous_position = None
+        area = numpy.copy(context_area)
+        for wall in self.value:
+            area[wall] = False
 
         offsets = [(1, 0), (-1, 0), (0, 1), (0, -1)]
         for offset in offsets:
             new_x = last_position[0] + offset[0]
             new_y = last_position[1] + offset[1]
-            if 0 <= new_x <= Configuration.MAX_X_GRID and 0 <= new_y <= Configuration.MAX_Y_GRID:
-                if previous_position is None or (previous_position is not None and new_x != previous_position[0] and new_y != previous_position[1]):
-                    self.add_child((new_x, new_y))
+            if 0 <= new_x <= Configuration.MAX_X_GRID and 0 <= new_y <= Configuration.MAX_Y_GRID and area[new_x, new_y]:
+                self.add_child((new_x, new_y))
 
 
 def compute_MCTS(area, cur_cycles, list_players, my_index):
@@ -207,14 +209,14 @@ def compute_MCTS(area, cur_cycles, list_players, my_index):
 
     current_position = cur_cycles[my_index]
     tree = Node(None, current_position)
-    tree.expansion()
+    tree.expansion(area)
 
     nb_iteration = NB_MCTS_ITERATIONS
     while nb_iteration > 0:
         selected_node = tree.selection()
         is_win, nb_turn = selected_node.play_out(area, cur_cycles, list_players, my_index)
 
-        if nb_turn > 0: selected_node.expansion()
+        if nb_turn > 0: selected_node.expansion(area)
         selected_node.back_propagate(is_win)
         nb_iteration -= 1
 
@@ -226,12 +228,15 @@ def compute_MCTS(area, cur_cycles, list_players, my_index):
             max_score = score
             next_move_to_play = node
 
-    next_position = next_move_to_play.value[-1]
-    if next_position[0] - current_position[0] > 0: return 'RIGHT'
-    elif next_position[0] - current_position[0] < 0: return 'LEFT'
-    elif next_position[1] - current_position[1] > 0: return 'DOWN'
-    elif next_position[0] - current_position[0] < 0: return 'UP'
-    else: return ''
+    if next_move_to_play is not None:
+        next_position = next_move_to_play.value[-1]
+        if next_position[0] - current_position[0] > 0: return 'RIGHT'
+        elif next_position[0] - current_position[0] < 0: return 'LEFT'
+        elif next_position[1] - current_position[1] > 0: return 'DOWN'
+        elif next_position[1] - current_position[1] < 0: return 'UP'
+        else: return ''
+    else:
+        return ''
 
 
 class MCTSBot():
@@ -244,6 +249,9 @@ class MCTSBot():
         self.turn = 0
 
     def compute_direction(self, input):
+        self.list_players.clear()
+        self.list_players_without_me.clear()
+
         splitted = input.split('\n')
         nb_players, my_index = [int(i) for i in splitted[0].split()]
 
@@ -283,4 +291,5 @@ class MCTSBot():
                     self.list_players_without_me.remove(i)
 
         direction = compute_MCTS(self.area, self.cur_cycles, self.list_players, my_index)
+        print(direction, flush=True)
         return direction
