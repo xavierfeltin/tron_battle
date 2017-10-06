@@ -8,10 +8,11 @@ from collections import deque
 from numpy import ones, copy
 from heapq import heappop, heappush
 
-SELECT_CONSTANT = 1.414213 #value from Wikipedia
+#SELECT_CONSTANT = 1.414213 #value from Wikipedia
+SELECT_CONSTANT = 10 #value from paper
 NB_TURNS_CHECK = 10 #value from the paper
 A = 1 #value from the paper
-NB_MCTS_ITERATIONS = 200 #experimental
+NB_MCTS_ITERATIONS = 800 #experimental
 
 class Node:
     def __init__(self, parent, value):
@@ -367,13 +368,13 @@ def compute_voronoi(cycles, list_players):
     for i in range(30):
         for j in range(20):
             distances = {}
-            closest_cycle = -1
+            closest_cycle = None
             is_limit = False
 
             for k in list_players:
                 distances[k] = abs(i - cycles[k][0]) + abs(j - cycles[k][1])
 
-                if closest_cycle == -1:
+                if closest_cycle is None:
                     closest_cycle = k
                 elif distances[k] < distances[closest_cycle]:
                     closest_cycle = k
@@ -384,6 +385,10 @@ def compute_voronoi(cycles, list_players):
             if not is_limit:
                 voronoi_cells[closest_cycle] += 1
 
+    #msg = ''
+    #for player in list_players:
+    #    msg += str(player) + ': ' + str(voronoi_cells[player]) + ' '
+    #print(str(msg), flush=True)
     return voronoi_cells
 
 def heuristic(cell, goal):
