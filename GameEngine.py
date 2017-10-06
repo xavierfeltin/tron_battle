@@ -44,7 +44,7 @@ class GameEngine:
 
                 start = time()
                 direction = self.players[i].compute_direction(input)
-                print(str(i) + ': ' + str((time() - start)*1000), flush=True)
+                print(str(i) + ': ' + str((time() - start)*1000), + 'ms', flush=True)
 
                 if direction == 'LEFT': new_x -= 1
                 elif direction == 'RIGHT': new_x += 1
