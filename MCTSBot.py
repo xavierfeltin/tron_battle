@@ -6,18 +6,20 @@ from random import randint
 from Bot import Bot
 from collections import deque
 from numpy import ones, copy
+from heapq import heappop, heappush
 
 SELECT_CONSTANT = 1.414213 #value from Wikipedia
-NB_TURNS_CHECK = 5 #value from the paper
+NB_TURNS_CHECK = 10 #value from the paper
 A = 1 #value from the paper
-NB_MCTS_ITERATIONS = 800 #experimental
-
+NB_MCTS_ITERATIONS = 200 #experimental
 
 class Node:
     def __init__(self, parent, value):
         self.score = 0.0
         self.nb_win = 0
         self.number_visit = 1
+        self.is_end_game = False
+        self.is_always_win = False
         self.children = []
         self.parent = parent
 
@@ -119,12 +121,12 @@ class Node:
         :param current_position: current position of the player
         :return: new position
         '''
-        offsets = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+        offsets = [[1, 0], [-1, 0], [0, 1], [0, -1]]
         possibilities = []
         nb_turns = len(self.value)
-        for offset in offsets:
-            new_x = current_position[0] + offset[0]
-            new_y = current_position[1] + offset[1]
+        for x,y in offsets:
+            new_x = current_position[0] + x
+            new_y = current_position[1] + y
             if 0 <= new_x <= Configuration.MAX_X_GRID and 0 <= new_y <= Configuration.MAX_Y_GRID and area[new_x, new_y]:
                 possibilities.append((new_x, new_y))
 
@@ -132,6 +134,43 @@ class Node:
             return possibilities[randint(0, len(possibilities) - 1)]
         else:
             return current_position #return nevertheless a valid position
+
+    def play_out_by_heuristics(self, context_area, initial_positions, list_players, my_index):
+        area, walls = self.initialize_play_out(context_area, initial_positions, list_players, my_index)
+
+        if self.is_end_game: return self.is_always_win, 0
+
+        # Check if it is an early end game
+        if len(list_players) == 2:
+            distance = compute_path(area, walls[my_index][-1], walls[1 - my_index][-1])
+
+            if distance is None:  # Two players are separated
+                my_spaces, is_separated = process_availables_spaces(area, walls[my_index][-1], [walls[1 - my_index][-1]])
+                ennemy_spaces, is_separated = process_availables_spaces(area, walls[1 - my_index][-1], walls[my_index][-1])
+
+                # compute the number of cases for each player
+                self.is_end_game = True
+                self.is_always_win = (my_spaces - ennemy_spaces) > 0
+                return self.is_always_win, 0
+            else:
+                #Use Voronoi for now
+                voronoi = compute_voronoi(initial_positions, list_players)
+                space_max = 0
+                winner = None
+                for player, space in voronoi.items():
+                    if space > space_max:
+                        winner = player
+
+                return winner == my_index,0
+        else:
+            # Use Voronoi for now
+            voronoi = compute_voronoi(initial_positions, list_players)
+            space_max = 0
+            winner = None
+            for player, space in voronoi.items():
+                if space > space_max:
+                    winner = player
+            return winner == my_index, 0
 
     def play_out(self, context_area, initial_positions, list_players, my_index):
          '''
@@ -142,6 +181,17 @@ class Node:
          is_win = True
          players = list_players[:]
          area, walls = self.initialize_play_out(context_area, initial_positions, players, my_index)
+
+         #Check if it is an early end game
+         if len(list_players) == 2:
+             my_spaces, is_separated = process_availables_spaces(area, walls[my_index][-1], [walls[1-my_index][-1]])
+             if is_separated: #Two players are separated
+                ennemy_spaces, is_separated= process_availables_spaces(area, walls[1-my_index][-1],walls[my_index][-1])
+
+                #compute the number of cases for each player
+                self.is_end_game = True
+                self.is_always_win = (my_spaces - ennemy_spaces) > 0
+                return self.is_always_win, 0
 
          players_game_over = []
          nb_turns_check_separeted = NB_TURNS_CHECK
@@ -167,17 +217,28 @@ class Node:
                     is_game_running = False
                     is_win = False
 
-            #TODO: add heuristics Voronoi, tree of chambers, ... to anticipate the end of the game
-            #Check the state of the game
-            #if nb_turns_check_separeted == 0:
-            #   nb_turns_check_separeted = NB_TURNS_CHECK
-            #else:
-            #   nb_turns_check_separeted -= 1
-
             if len(players) <= 1:
                is_game_running = False
             else:
+                # TODO: add heuristics Voronoi, tree of chambers, ... to anticipate the end of the game
+                # Check the state of the game
+                if nb_turns_check_separeted == 0:
+                    # Check if it is an early end game
+                    if len(list_players) == 2:
+                        my_spaces, is_separated = process_availables_spaces(area, walls[my_index][-1], [walls[1 - my_index][-1]])
+                        if is_separated:  # Two players are separated
+                            ennemy_spaces, is_separated = process_availables_spaces(area, walls[1 - my_index][-1], walls[my_index][-1])
+
+                            # compute the number of cases for each player
+                            is_game_running = False
+                            is_win = (my_spaces - ennemy_spaces) > 0
+
+                    nb_turns_check_separeted = NB_TURNS_CHECK
+                else:
+                    nb_turns_check_separeted -= 1
+
                 turn += 1
+
          return is_win, turn
 
     def expansion(self, context_area):
@@ -193,13 +254,13 @@ class Node:
         for wall in self.value:
             area[wall] = False
 
-        offsets = [(1, 0), (-1, 0), (0, 1), (0, -1)]
-        for offset in offsets:
-            new_x = last_position[0] + offset[0]
-            new_y = last_position[1] + offset[1]
+        offsets = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+        for x,y in offsets:
+            new_x = last_position[0] + x
+            new_y = last_position[1] + y
+
             if 0 <= new_x <= Configuration.MAX_X_GRID and 0 <= new_y <= Configuration.MAX_Y_GRID and area[new_x, new_y]:
                 self.add_child((new_x, new_y))
-
 
 def compute_MCTS(area, cur_cycles, list_players, my_index):
     '''
@@ -214,9 +275,17 @@ def compute_MCTS(area, cur_cycles, list_players, my_index):
     nb_iteration = NB_MCTS_ITERATIONS
     while nb_iteration > 0:
         selected_node = tree.selection()
-        is_win, nb_turn = selected_node.play_out(area, cur_cycles, list_players, my_index)
 
-        if nb_turn > 0: selected_node.expansion(area)
+        #Test if the game is arleady in a sure win / loss position
+        if selected_node.is_end_game:
+            selected_node.back_propagate(selected_node.is_always_win)
+        else:
+            #is_win, nb_turn = selected_node.play_out(area, cur_cycles, list_players, my_index)
+            #if nb_turn > 0: selected_node.expansion(area)
+
+            is_win, nb_turn = selected_node.play_out_by_heuristics(area, cur_cycles, list_players, my_index)
+            if not selected_node.is_end_game: selected_node.expansion(area)
+
         selected_node.back_propagate(is_win)
         nb_iteration -= 1
 
@@ -238,6 +307,124 @@ def compute_MCTS(area, cur_cycles, list_players, my_index):
     else:
         return ''
 
+
+def process_availables_spaces(p_area, root, players_position, player_pos = None):
+    nb_spaces = 0
+    front_nodes = deque()
+
+    area = numpy.copy(p_area)
+    area[root] = False
+
+    if player_pos is not None:
+        area[player_pos] = False
+
+    front_nodes.append(root)
+    is_space_shared = True
+    while len(front_nodes) > 0:
+        nb_spaces += 1
+        cur = front_nodes.popleft()
+
+        available_directions = [[0, -1], [0, 1], [-1, 0], [1, 0]]
+
+        for off_x, off_y in available_directions:
+            new_x = cur[0] + off_x
+            new_y = cur[1] + off_y
+
+            if 0 <= new_x < 30 and 0 <= new_y < 20 and area[new_x, new_y]:
+                area[new_x, new_y] = False
+                front_nodes.append((new_x, new_y))
+
+                for position in players_position:
+                    is_space_shared = is_space_shared and (position == (new_x, new_y))
+
+    return nb_spaces, is_space_shared
+
+def recursive_flood_fill(p_area, root):
+    area = numpy.copy(p_area)
+    area[root] = True
+
+    return fill(p_area, root)
+
+def fill(area, position):
+    if area[position]:
+        area[position] = False
+
+        nb_count = 1
+        nb_count += fill(area, (position[0] + 1, position[1]))
+        nb_count += fill(area, (position[0] - 1, position[1]))
+        nb_count += fill(area, (position[0], position[1]+1))
+        nb_count += fill(area, (position[0], position[1]-1))
+
+        return nb_count
+    else:
+        return 0
+
+def compute_voronoi(cycles, list_players):
+    voronoi_cells = {}
+    for i in list_players:
+        voronoi_cells[i] = 0
+
+    for i in range(30):
+        for j in range(20):
+            distances = {}
+            closest_cycle = -1
+            is_limit = False
+
+            for k in list_players:
+                distances[k] = abs(i - cycles[k][0]) + abs(j - cycles[k][1])
+
+                if closest_cycle == -1:
+                    closest_cycle = k
+                elif distances[k] < distances[closest_cycle]:
+                    closest_cycle = k
+                elif distances[k] == distances[closest_cycle]:
+                    is_limit = True
+                    break
+
+            if not is_limit:
+                voronoi_cells[closest_cycle] += 1
+
+    return voronoi_cells
+
+def heuristic(cell, goal):
+    '''
+    Heuristic for A*, here manhattan distance
+    '''
+    return abs(cell[0] - goal[0]) + abs(cell[1] - goal[1])
+
+
+def compute_path(area, root, goal):
+    '''
+    implementation of A*
+    '''
+
+    pr_queue = []
+    #heappush(pr_queue, (0 + heuristic(root, goal), 0, [], root))
+    heappush(pr_queue, (0 + heuristic(root, goal), 0, root))
+    #visited = set()
+
+    visited_area = ones((30,20), dtype=bool)
+
+    while len(pr_queue) > 0:
+
+        _, cost, current = heappop(pr_queue)  # return the priority in the heap, cost, path and current element
+
+        if current == goal: #Maybe change here to return the element and compute the path after ...
+            return cost
+
+        if visited_area[current]:
+            visited_area[current] = False
+
+            available_directions = [[0, -1], [0, 1], [-1, 0], [1, 0]]
+
+            for off_x, off_y in available_directions:
+                new_x = current[0] + off_x
+                new_y = current[1] + off_y
+
+                if 0 <= new_x < 30 and 0 <= new_y < 20 and (area[new_x, new_y] or (new_x == goal[0] and new_y == goal[1])):
+                    neighbor = (new_x, new_y)
+                    heappush(pr_queue, (cost + heuristic(neighbor, goal), cost + 1, neighbor))
+    return None
 
 class MCTSBot():
     def __init__(self):
