@@ -16,10 +16,14 @@ class GameEngine:
 
     def initialize(self, players):
         for i in range(self.nb_players):
-            x,y = -1,-1
-            while (x,y) in self.cycles_positions or (x == -1 and y == -1):
-                x = randint(0, Configuration.MAX_X_GRID)
-                y = randint(0, Configuration.MAX_Y_GRID)
+            #x,y = -1,-1
+            #while (x,y) in self.cycles_positions or (x == -1 and y == -1):
+            #    x = randint(0, Configuration.MAX_X_GRID)
+            #    y = randint(0, Configuration.MAX_Y_GRID)
+
+            x = Configuration.START_POSITIONS[i][0]
+            y = Configuration.START_POSITIONS[i][1]
+
             self.cycles_positions.append((x,y))
             self.initial_cycles_positions.append((x,y))
             self.players_game_over.append(False)
