@@ -1,19 +1,19 @@
 import numpy
+
 import Configuration
 
 from math import sqrt, log
 from random import randint
-from Bot import Bot
 from collections import deque
-from numpy import ones, copy
+from numpy import ones, zeros, copy, int32
 from heapq import heappop, heappush
 from time import time
 
-#SELECT_CONSTANT = 1.414213 #value from Wikipedia
-SELECT_CONSTANT = 10 #value from paper
+SELECT_CONSTANT = 1.414213 #value from Wikipedia
+#SELECT_CONSTANT = 10 #value from paper
 NB_TURNS_CHECK = 10 #value from the paper
 A = 1 #value from the paper
-NB_MCTS_ITERATIONS = 1000 #experimental
+NB_MCTS_ITERATIONS = 100 #experimental
 
 class Node:
     def __init__(self, parent, value):
@@ -101,10 +101,10 @@ class Node:
             walls[player] = []
 
             if player == my_index:
-                area[self.value[0][0], self.value[0][1]] = False
+                area[self.value[0][0], self.value[0][1]] = Configuration.WALL_CODE
                 walls[player].append(self.value[0])
             else:
-                area[current_positions[player]] = False
+                area[current_positions[player]] = Configuration.WALL_CODE
                 walls[player].append(current_positions[player])
 
         #Playout random moves for ennemies after that
@@ -112,11 +112,11 @@ class Node:
         for index in range(1, nb_values):
             for player in players:
                 if player == my_index:
-                    area[self.value[index]] = False
+                    area[self.value[index]] = Configuration.WALL_CODE
                     walls[player].append(self.value[index])
                 else:
                     position = self.process_random_position(area, walls[player][-1])
-                    area[position] = False
+                    area[position] = Configuration.WALL_CODE
                     walls[player].append(position)
 
         return area, walls
@@ -134,7 +134,7 @@ class Node:
         for x,y in offsets:
             new_x = current_position[0] + x
             new_y = current_position[1] + y
-            if 0 <= new_x <= Configuration.MAX_X_GRID and 0 <= new_y <= Configuration.MAX_Y_GRID and area[new_x, new_y]:
+            if 0 <= new_x <= Configuration.MAX_X_GRID and 0 <= new_y <= Configuration.MAX_Y_GRID and area[new_x, new_y] == 0:
                 possibilities.append((new_x, new_y))
 
         if len(possibilities) > 0:
@@ -163,7 +163,11 @@ class Node:
                 return self.is_always_win, my_spaces
             else:
                 #Use Voronoi for now
-                voronoi = compute_voronoi(area, current_positions, list_players)
+                #voronoi = compute_voronoi(area, current_positions, list_players)
+
+                start = time()
+                voronoi = compute_voronoi_bfs(area, current_positions, list_players)
+                print('voronoi: ' + str((time()-start)*1000), flush=True)
                 space_max = 0
                 winner = None
                 for player, space in voronoi.items():
@@ -173,7 +177,11 @@ class Node:
                 return winner == my_index, voronoi[my_index]
         else:
             # Use Voronoi for now
-            voronoi = compute_voronoi(area, current_positions, list_players)
+            #voronoi = compute_voronoi(area, current_positions, list_players)
+
+            start = time()
+            voronoi = compute_voronoi_bfs(area, current_positions, list_players)
+            print('voronoi: ' + str((time() - start) * 1000), flush=True)
             space_max = 0
             winner = None
             for player, space in voronoi.items():
@@ -211,12 +219,12 @@ class Node:
                 position = self.process_random_position(area, walls[player][-1])
 
                 if area[position]:
-                    area[position] = False
+                    area[position] = Configuration.WALL_CODE
                     walls[player].append(position)
                 else:
                     players_game_over.append(player)
                     for wall in walls[player]:
-                        area[wall] = True
+                        area[wall] = 0
                     #del self.walls[player] => not mandatory to clean the variables here ...
 
             for player in players_game_over:
@@ -261,14 +269,14 @@ class Node:
 
         area = numpy.copy(context_area)
         for wall in self.value:
-            area[wall] = False
+            area[wall] = Configuration.WALL_CODE
 
         offsets = [[1, 0], [-1, 0], [0, 1], [0, -1]]
         for x,y in offsets:
             new_x = last_position[0] + x
             new_y = last_position[1] + y
 
-            if 0 <= new_x <= Configuration.MAX_X_GRID and 0 <= new_y <= Configuration.MAX_Y_GRID and area[new_x, new_y]:
+            if 0 <= new_x <= Configuration.MAX_X_GRID and 0 <= new_y <= Configuration.MAX_Y_GRID and area[new_x, new_y] == 0:
                 self.add_child((new_x, new_y))
 
 def compute_MCTS(area, cur_cycles, list_players, my_index):
@@ -322,10 +330,10 @@ def process_availables_spaces(p_area, root, players_position, player_pos = None)
     front_nodes = deque()
 
     area = numpy.copy(p_area)
-    area[root] = False
+    area[root] = 0
 
     if player_pos is not None:
-        area[player_pos] = False
+        area[player_pos] = 0
 
     front_nodes.append(root)
     is_space_shared = True
@@ -339,8 +347,8 @@ def process_availables_spaces(p_area, root, players_position, player_pos = None)
             new_x = cur[0] + off_x
             new_y = cur[1] + off_y
 
-            if 0 <= new_x < 30 and 0 <= new_y < 20 and area[new_x, new_y]:
-                area[new_x, new_y] = False
+            if 0 <= new_x < 30 and 0 <= new_y < 20 and area[new_x, new_y]==0:
+                area[new_x, new_y] = Configuration.WALL_CODE
                 front_nodes.append((new_x, new_y))
 
                 for position in players_position:
@@ -350,13 +358,13 @@ def process_availables_spaces(p_area, root, players_position, player_pos = None)
 
 def recursive_flood_fill(p_area, root):
     area = numpy.copy(p_area)
-    area[root] = True
+    area[root] = 0
 
     return fill(p_area, root)
 
 def fill(area, position):
     if area[position]:
-        area[position] = False
+        area[position] = Configuration.WALL_CODE
 
         nb_count = 1
         nb_count += fill(area, (position[0] + 1, position[1]))
@@ -375,7 +383,7 @@ def compute_voronoi(area, cycles, list_players):
 
     for i in range(30):
         for j in range(20):
-            if area[i,j]:
+            if area[i,j] == 0:
                 distances = {}
                 closest_cycle = None
                 is_limit = False
@@ -400,6 +408,60 @@ def compute_voronoi(area, cycles, list_players):
     #print(str(msg), flush=True)
     return voronoi_cells
 
+def compute_voronoi_bfs(area, last_positions, list_players):
+    '''
+    Compute voronoi regions based on BFS algorithm.
+    It leaves outside the space in closed chambers
+    :param area:
+    :param last_positions:
+    :param list_players:
+    :return:
+    '''
+
+    voronoi_area = copy(area)
+    voronoi_area[last_positions[0]] = 1
+    voronoi_area[last_positions[1]] = -1
+
+    voronoi = {}
+    voronoi[0] = 1
+    voronoi[1] = 1
+    voronoi[Configuration.NEUTRAL_CODE] = 0
+
+    front_nodes = deque()
+    front_nodes.append(last_positions[0])
+    front_nodes.append(last_positions[1])
+
+    available_directions = [[0, -1], [0, 1], [-1, 0], [1, 0]]
+    nb_it = 0
+    while len(front_nodes) > 0:
+        cur = front_nodes.popleft()
+        x, y = cur[0], cur[1]
+
+        if voronoi_area[x, y] > 0: sign = 1
+        else: sign = -1
+
+        neighbor_value = voronoi_area[x, y] + sign
+        other_neighbor = neighbor_value * -1
+
+        for off_x, off_y in available_directions:
+            new_x = x + off_x
+            new_y = y + off_y
+
+            if 0 <= new_x <= Configuration.MAX_X_GRID and 0 <= new_y <= Configuration.MAX_Y_GRID:
+                next_value = voronoi_area[new_x, new_y]
+
+                if next_value == 0:
+                    voronoi_area[new_x, new_y] = neighbor_value
+                    front_nodes.append((new_x, new_y))
+                    if sign == 1: voronoi[0] += 1
+                    else: voronoi[1] += 1
+                elif next_value == other_neighbor:
+                    voronoi_area[new_x, new_y] = Configuration.NEUTRAL_CODE
+                    voronoi[Configuration.NEUTRAL_CODE] += 1
+
+    print('nb iteration = ' + str(nb_it), flush=True)
+    return voronoi
+
 def heuristic(cell, goal):
     '''
     Heuristic for A*, here manhattan distance
@@ -416,7 +478,7 @@ def compute_path(area, root, goal):
     heappush(pr_queue, (0 + heuristic(root, goal), 0, root))
 
     visited_area = copy(area)
-    visited_area[root] = True
+    visited_area[root] = 0
     available_directions = [[0, -1], [0, 1], [-1, 0], [1, 0]]
 
     while len(pr_queue) > 0:
@@ -425,8 +487,8 @@ def compute_path(area, root, goal):
         if current == goal: #Maybe change here to return the element and compute the path after ...
             return cost
 
-        if visited_area[current]:
-            visited_area[current] = False
+        if visited_area[current] == 0:
+            visited_area[current] = Configuration.WALL_CODE
 
             for off_x, off_y in available_directions:
                 new_x = current[0] + off_x
@@ -441,7 +503,7 @@ class MCTSBot():
     def __init__(self):
         self.cur_cycles = {}
         self.wall_cycles = {}
-        self.area = ones((30, 20), dtype=bool)
+        self.area = zeros((30, 20), dtype=int32)
         self.list_players = []
         self.list_players_without_me = []
         self.turn = 0
@@ -472,15 +534,15 @@ class MCTSBot():
 
                 if self.turn == 0:
                     self.wall_cycles[i] = [(x0, y0)]
-                    self.area[x0, y0] = False
+                    self.area[x0, y0] = Configuration.WALL_CODE
 
                 self.wall_cycles[i].append((x1, y1))
-                self.area[x1, y1] = False
+                self.area[x1, y1] = Configuration.WALL_CODE
             else:
                 # If player has lost, remove his wall from the game
                 if i in self.cur_cycles:
                     for case in self.wall_cycles[i]:
-                        self.area[case] = True
+                        self.area[case] = 0
 
                     del self.cur_cycles[i]
                     del self.wall_cycles[i]
