@@ -459,7 +459,6 @@ def compute_voronoi_bfs(area, last_positions, list_players):
                     voronoi_area[new_x, new_y] = Configuration.NEUTRAL_CODE
                     voronoi[Configuration.NEUTRAL_CODE] += 1
 
-    print('nb iteration = ' + str(nb_it), flush=True)
     return voronoi
 
 def heuristic(cell, goal):
@@ -498,6 +497,119 @@ def compute_path(area, root, goal):
                     neighbor = (new_x, new_y)
                     heappush(pr_queue, (cost + heuristic(neighbor, goal), cost + 1, neighbor))
     return None
+
+class Chamber:
+    def _init__(self, p_entrance):
+        self.space = 0
+        self.entrance = p_entrance
+        self.contains_battle_front = False
+        self.is_leaf = False
+
+def compute_tree_of_chambers(area, voronoi_area, last_positions, walls, player_index):
+    '''
+    Compute the space available with the Tree of chambers algorithm
+    '''
+
+    list_chambers = []
+    list_articulation_points = []
+
+    chamber_area = zeros((Configuration.MAX_X_GRID+1, Configuration.MAX_Y_GRID+1), dtype=object)
+    visited_area = copy(area)
+
+    front_nodes = deque()
+
+    available_directions = [[0, -1], [0, 1], [-1, 0], [1, 0]]
+    nb_spaces = 0
+
+    #Step 0: Build first chamber and entrance is the step before the current position
+    #note that chamber_area[previous_position] == None
+    new_chamber = Chamber(walls[player_index][-2])
+    new_chamber.space = 1
+    chamber_area[last_positions[player_index]] = new_chamber
+    front_nodes.append(last_positions[player_index])
+
+    #Step 1: Search other chambers
+    while len(front_nodes) > 0:
+        cur = front_nodes.popleft()
+        x, y = cur[0], cur[1]
+        current_chamber = chamber_area[cur]
+
+        for off_x, off_y in available_directions:
+            new_x = x + off_x
+            new_y = y + off_y
+
+            if 0 <= new_x <= Configuration.MAX_X_GRID and 0 <= new_y <= Configuration.MAX_Y_GRID:
+                #Step 1-1: if neighbor not in voronoi area of the player => ignore it !
+                if numpy.sign(voronoi_area[cur]) > 0:
+                    is_bottle_neck = is_articulation_point(area, (new_x, new_y), (off_x*-1, off_y*-1))
+
+                    if chamber_area[(new_x, new_y)] == 0 and not is_bottle_neck:
+                        #Step 1-2: if neighbor without chamber and not articulation point:
+                            #set current chamber to the neighbor
+                            #increment chamber size
+                            #add neighbor to the front queue
+                        chamber_area[(new_x, new_y)] = current_chamber
+                        current_chamber.space += 1
+                        front_nodes.append((new_x, new_y))
+                    elif chamber_area[(new_x, new_y)] == 0 and is_bottle_neck:
+                        #Step 1-3: if neighbor without chamber and is an articulation point:
+                            #create a new chamber and affect it to the neighbor
+                            #set chamber size to 1
+                            #add neighbor to the front queue
+                        new_chamber = Chamber((new_x, new_y))
+                        new_chamber.space = 1
+                        chamber_area[(new_x, new_y)] = new_chamber
+                        front_nodes.append((new_x, new_y))
+                    else:
+                        #Step 1-4: if neighbor associated with the current chamber (or entrance of the current chamber) => ignore it !
+                        #Step 1-5: if neighbor associated with a chamber different from the current chamber and not the entrance of the current chamber
+                            # merge current chamber and neighbor chamber:
+                                # identify the lowest common parent chamber
+                                # merge the two chambers into the common parent
+                            # do NOT add the neighbor to the front queue !
+
+    #Step 2: Compute spaces between the different leaf chambers and root chamber
+    #Step 3: Select best solution (more space => better solution)
+
+                directions = [[0, -1], [0, 1], [-1, 0], [1, 0]]
+                directions.remove([off_x, off_y])
+
+                #Detect if the case is an articulation point
+                #Improvement: store articulation point information directly when moving players
+                free_space = 0
+                for off_x2, off_y2 in directions:
+                    new_x2 = new_x + off_x2
+                    new_y2 = new_y + off_y2
+                    if 0 <= new_x2 <= Configuration.MAX_X_GRID and 0 <= new_y2 <= Configuration.MAX_Y_GRID and area[new_x2, new_y2] == 0: free_space+=1
+
+                if free_space == 1:
+                    list_articulation_points.append((new_x2, new_y2))
+                    new_chamber = Chamber((new_x2, new_y2))
+
+                visited_area[new_x, new_y] = 1
+
+    return nb_spaces
+
+def is_articulation_point(area, position, prev_off):
+    '''
+    True if the point is an articulation point (only node to connect another part of the graph)
+    :param area: current state of the graph
+    :param position: position to test
+    :param prev_off: previous position coming from to ignore when computing space
+    :return: True if it is an articulation point
+    '''
+    available_directions = [[0, -1], [0, 1], [-1, 0], [1, 0]]
+    available_directions.remove(prev_off)
+
+    # Detect if the case is an articulation point
+    # Improvement: store articulation point information directly when moving players
+    free_space = 0
+    for off_x, off_y in available_directions:
+        new_x = position[0] + off_x
+        new_y = position[1] + off_y
+        if 0 <= new_x <= Configuration.MAX_X_GRID and 0 <= new_y <= Configuration.MAX_Y_GRID and area[new_x, new_y] == 0: free_space += 1
+
+    return free_space == 1
 
 class MCTSBot():
     def __init__(self):
