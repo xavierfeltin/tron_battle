@@ -1,14 +1,16 @@
 import threading
+import gc
 from GameFrame import GameFrame
 from GameEngine import GameEngine
 from RandomBot import RandomBot
 from ExplicitBot import ExplicitBot
-from MCTSBot import MCTSBot
+#from MCTSBot import MCTSBot
 from time import sleep
 
 NB_PLAYERS = 2
 
 def game_loop(engine, main_frame):
+    gc.disable()
     while main_frame.is_running():
 
         if engine.is_game_playing():
@@ -21,12 +23,13 @@ def game_loop(engine, main_frame):
         main_frame.update()
 
         sleep(0.2)
+    gc.enable()
 
 if __name__ == "__main__":
     engine = GameEngine(NB_PLAYERS)
 
     players = []
-    players.append(MCTSBot())
+    players.append(ExplicitBot())
     for i in range(NB_PLAYERS-1):
         players.append(ExplicitBot())
 
