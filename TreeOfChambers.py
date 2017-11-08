@@ -39,22 +39,39 @@ def articulation_points(area, root):
     '''
 
     class Node:
-        def __init__(self, p_entrance):
+        def __init__(self):
             self.depth = None
             self.low = None
 
     visited_nodes =  zeros((Configuration.MAX_X_GRID+1, Configuration.MAX_Y_GRID+1), dtype=object)
-
-    P = []
+    parents = {}
+    childCount = 0
+    depth = 0
+    available_directions = [[0, -1], [0, 1], [-1, 0], [1, 0]]
     articulations = []
 
-    available_directions = [[0, -1], [0, 1], [-1, 0], [1, 0]]
-    for off_x, off_y in available_directions:
-        new_x += off_x
-        new_y += off_y
+    def f(current_root):
+        depth += 1
+        node = Node()
+        node.depth = depth
+        node.low = depth
 
-        if 0 <= new_x <= Configuration.MAX_X_GRID and 0 <= new_y <= Configuration.MAX_Y_GRID and not area[new_x, new_y]:
-            if visited_nodes[new_x, new_y] == 0:
+        for off_x, off_y in available_directions:
+            new_x += off_x
+            new_y += off_y
+
+            if 0 <= new_x <= Configuration.MAX_X_GRID and 0 <= new_y <= Configuration.MAX_Y_GRID and not area[new_x, new_y]:
+                if visited_nodes[new_x, new_y] == 0:
+                    parents[(new_x, new_y)] = (current_root)
+                    f((new_x, new_y))
+                    childCount = childCount + 1
+
+                    if current_root != root and visited_nodes[new_x,new_y].low >= visited_nodes[current_root].depth:
+                        articulations.append((new_x, new_y))
+
+                    visited_nodes[current_root].low = min(visited_nodes[current_root].low, visited_nodes[new_x, new_y].low)
+                elif current_root in parents and parents[current_root] != current_root:
+                    visited_nodes[current_root].low = min(visited_nodes[current_root].low, visited_nodes[new_x, new_y].depth)
 
     '''
     https: // en.wikipedia.org / wiki / Biconnected_component
@@ -73,7 +90,7 @@ def articulation_points(area, root):
                     isArticulation = true
                 low[i] = Min(low[i], low[ni])
             else if ni <> parent[i]
-            low[i] = Min(low[i], depth[ni])
+                low[i] = Min(low[i], depth[ni])
 
 
         if (parent[i] <> null and isArticulation) or (parent[i] == null and childCount > 1)
