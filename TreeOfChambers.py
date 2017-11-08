@@ -1,9 +1,10 @@
 import Configuration
-from numpy import ones, zeros, copy, int32, sign
+import numpy
+from numpy import ones, zeros, copy, int32
 from collections import deque
 
 class Chamber:
-    def _init__(self, p_entrance):
+    def __init__(self, p_entrance):
         self.space = 0
         self.entrance = p_entrance
         self.positions = deque() #help in case of merge
@@ -28,6 +29,82 @@ def is_articulation_point(area, position, prev_off):
         if 0 <= new_x <= Configuration.MAX_X_GRID and 0 <= new_y <= Configuration.MAX_Y_GRID and area[new_x, new_y] == 0: free_space += 1
 
     return free_space == 1
+
+def articulation_points(area, root):
+    '''
+    Find the points that if were filled would separate the board.
+    DFS approach
+    https://en.wikipedia.org/wiki/Biconnected_component
+    :return: list of adjacent points
+    '''
+
+    class Node:
+        def __init__(self, p_entrance):
+            self.depth = None
+            self.low = None
+
+    visited_nodes =  zeros((Configuration.MAX_X_GRID+1, Configuration.MAX_Y_GRID+1), dtype=object)
+
+    P = []
+    articulations = []
+
+    available_directions = [[0, -1], [0, 1], [-1, 0], [1, 0]]
+    for off_x, off_y in available_directions:
+        new_x += off_x
+        new_y += off_y
+
+        if 0 <= new_x <= Configuration.MAX_X_GRID and 0 <= new_y <= Configuration.MAX_Y_GRID and not area[new_x, new_y]:
+            if visited_nodes[new_x, new_y] == 0:
+
+    '''
+    https: // en.wikipedia.org / wiki / Biconnected_component
+    GetArticulationPoints(i, d)
+        visited[i] = true
+        depth[i] = d
+        low[i] = d
+        childCount = 0
+        isArticulation = false
+        for each ni in adj[i]
+            if not visited[ni]
+                parent[ni] = i
+                GetArticulationPoints(ni, d + 1)
+                childCount = childCount + 1
+                if low[ni] >= depth[i]
+                    isArticulation = true
+                low[i] = Min(low[i], low[ni])
+            else if ni <> parent[i]
+            low[i] = Min(low[i], depth[ni])
+
+
+        if (parent[i] <> null and isArticulation) or (parent[i] == null and childCount > 1)
+            Output
+            i as articulation
+            point
+    '''
+
+    '''
+    Une implémentation du pseudo code de Wikipedia
+    Je pense que c sert de depth dans cette implémentation
+    https: // github.com / coreyabshire / tron / blob / master / tronutils.py
+    V = set(); A = Adjacent(board, is_floor)
+    L = {}; N = {}; c = [0]; P = {}; X = set()
+    def f(v):
+        V.add(v)
+        c[0] += 1
+        L[v] = N[v] = c[0]
+        for w in A[v]:
+            if w not in V:
+                P[w] = v
+                f(w)
+                if v != root and L[w] >= N[v]:
+                    X.add(v)
+                L[v] = min(L[v], L[w])
+            else:
+                if v in P and P[v] != w:
+                    L[v] = min(L[v], N[w])
+    f(root)
+    return X
+    '''
 
 def compute_tree_of_chambers(area, voronoi_area, current_position, previous_position):
     '''
@@ -62,10 +139,10 @@ def compute_tree_of_chambers(area, voronoi_area, current_position, previous_posi
             new_x = x + off_x
             new_y = y + off_y
 
-            if 0 <= new_x <= Configuration.MAX_X_GRID and 0 <= new_y <= Configuration.MAX_Y_GRID and area[new_x, new_y]:
+            if 0 <= new_x <= Configuration.MAX_X_GRID and 0 <= new_y <= Configuration.MAX_Y_GRID and not area[new_x, new_y]:
                 #Step 1-1: if neighbor not in voronoi area of the player => ignore it !
-                if sign(voronoi_area[cur]) > 0:
-                    is_bottle_neck = is_articulation_point(area, (new_x, new_y), (off_x*-1, off_y*-1))
+                if numpy.sign(voronoi_area[cur]) > 0:
+                    is_bottle_neck = is_articulation_point(area, (new_x, new_y), [off_x*-1, off_y*-1])
 
                     if chamber_area[(new_x, new_y)] == 0 and not is_bottle_neck:
                         #Step 1-2: if neighbor without chamber and not articulation point:
@@ -119,15 +196,13 @@ def compute_tree_of_chambers(area, voronoi_area, current_position, previous_posi
     best_space = 0
     for chamber in list_chambers:
         current_space = 0
-        while chamber.entrance != origin_chamber:
+        while chamber_area[chamber.entrance] != origin_chamber:
             current_space += chamber.space
-        current_space += origin_chamber.space
 
         if best_space < current_space:
             best_space = current_space
 
     #No other chambers than the origin one
-    if best_space == 0:
-        best_space = origin_chamber.space
+    best_space += origin_chamber.space
 
     return best_space

@@ -1,7 +1,7 @@
 import unittest
 import Configuration
 from numpy import ones, zeros, copy, int32, sign
-from TreeOfChambers import is_articulation_point
+from TreeOfChambers import is_articulation_point, compute_tree_of_chambers
 
 class TestTreeOfChambers(unittest.TestCase):
     def test_not_articulation_point(self):
@@ -32,3 +32,13 @@ class TestTreeOfChambers(unittest.TestCase):
 
         is_it = is_articulation_point(area, (1, 0), [-1, 0])
         self.assertFalse(is_it)
+
+    def test_compute_tree_of_chambers_empty(self):
+        area = zeros((Configuration.MAX_X_GRID + 1, Configuration.MAX_Y_GRID + 1), dtype=bool)
+        voronoi = ones((Configuration.MAX_X_GRID+1, Configuration.MAX_Y_GRID+1), dtype=int32)
+        current_pos = (15,15)
+        area[current_pos] = 1
+
+        nb_spaces = compute_tree_of_chambers(area, voronoi, current_pos, (-1,-1))
+
+        self.assertEqual(nb_spaces, (Configuration.MAX_X_GRID * Configuration.MAX_Y_GRID))
