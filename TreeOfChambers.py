@@ -30,7 +30,7 @@ def is_articulation_point(area, position, prev_off):
 
     return free_space == 1
 
-def articulation_points(area, root):
+def detect_articulation_points(area, root):
     '''
     Find the points that if were filled would separate the board.
     DFS approach
@@ -45,33 +45,35 @@ def articulation_points(area, root):
 
     visited_nodes =  zeros((Configuration.MAX_X_GRID+1, Configuration.MAX_Y_GRID+1), dtype=object)
     parents = {}
-    childCount = 0
-    depth = 0
     available_directions = [[0, -1], [0, 1], [-1, 0], [1, 0]]
     articulations = []
 
-    def f(current_root):
-        depth += 1
+    def f(vertex, p_depth):
+        depth = p_depth
+
         node = Node()
         node.depth = depth
         node.low = depth
+        visited_nodes[vertex] = node
 
         for off_x, off_y in available_directions:
-            new_x += off_x
-            new_y += off_y
+            new_x = vertex[0] + off_x
+            new_y = vertex[1] + off_y
 
             if 0 <= new_x <= Configuration.MAX_X_GRID and 0 <= new_y <= Configuration.MAX_Y_GRID and not area[new_x, new_y]:
                 if visited_nodes[new_x, new_y] == 0:
-                    parents[(new_x, new_y)] = (current_root)
-                    f((new_x, new_y))
-                    childCount = childCount + 1
+                    parents[(new_x, new_y)] = vertex
+                    f((new_x, new_y), p_depth + 1)
 
-                    if current_root != root and visited_nodes[new_x,new_y].low >= visited_nodes[current_root].depth:
-                        articulations.append((new_x, new_y))
+                    if vertex != root and visited_nodes[new_x,new_y].low >= visited_nodes[vertex].depth and vertex not in articulations:
+                        articulations.append(vertex)
 
-                    visited_nodes[current_root].low = min(visited_nodes[current_root].low, visited_nodes[new_x, new_y].low)
-                elif current_root in parents and parents[current_root] != current_root:
-                    visited_nodes[current_root].low = min(visited_nodes[current_root].low, visited_nodes[new_x, new_y].depth)
+                    visited_nodes[vertex].low = min(visited_nodes[vertex].low, visited_nodes[new_x, new_y].low)
+                elif vertex in parents and parents[vertex] != (new_x, new_y):
+                    visited_nodes[vertex].low = min(visited_nodes[vertex].low, visited_nodes[new_x, new_y].depth)
+
+    f(root,0)
+    return articulations
 
     '''
     https: // en.wikipedia.org / wiki / Biconnected_component
