@@ -4,31 +4,11 @@ from numpy import ones, zeros, copy, int32
 from collections import deque
 
 class Chamber:
-    def __init__(self, p_entrance):
+    def __init__(self, p_entrance, p_parent = None):
         self.space = 0
         self.entrance = p_entrance
         self.positions = deque() #help in case of merge
-
-def is_articulation_point(area, position, prev_off):
-    '''
-    True if the point is an articulation point (only node to connect another part of the graph)
-    :param area: current state of the graph
-    :param position: position to test
-    :param prev_off: previous position coming from to ignore when computing space
-    :return: True if it is an articulation point
-    '''
-    available_directions = [[0, -1], [0, 1], [-1, 0], [1, 0]]
-    available_directions.remove(prev_off)
-
-    # Detect if the case is an articulation point
-    # Improvement: store articulation point information directly when moving players
-    free_space = 0
-    for off_x, off_y in available_directions:
-        new_x = position[0] + off_x
-        new_y = position[1] + off_y
-        if 0 <= new_x <= Configuration.MAX_X_GRID and 0 <= new_y <= Configuration.MAX_Y_GRID and area[new_x, new_y] == 0: free_space += 1
-
-    return free_space == 1
+        self.parent = p_parent
 
 def detect_articulation_points(area, root):
     '''
@@ -125,7 +105,7 @@ def detect_articulation_points(area, root):
     return X
     '''
 
-def compute_tree_of_chambers(area, voronoi_area, current_position, previous_position):
+def compute_tree_of_chambers(area, voronoi_area, articulation_points, current_position, previous_position):
     '''
     Compute the space available with the Tree of chambers algorithm
     '''
@@ -161,7 +141,7 @@ def compute_tree_of_chambers(area, voronoi_area, current_position, previous_posi
             if 0 <= new_x <= Configuration.MAX_X_GRID and 0 <= new_y <= Configuration.MAX_Y_GRID and not area[new_x, new_y]:
                 #Step 1-1: if neighbor not in voronoi area of the player => ignore it !
                 if numpy.sign(voronoi_area[cur]) > 0:
-                    is_bottle_neck = is_articulation_point(area, (new_x, new_y), [off_x*-1, off_y*-1])
+                    is_bottle_neck = (new_x, new_y) in articulation_points
 
                     if chamber_area[(new_x, new_y)] == 0 and not is_bottle_neck:
                         #Step 1-2: if neighbor without chamber and not articulation point:
@@ -170,19 +150,19 @@ def compute_tree_of_chambers(area, voronoi_area, current_position, previous_posi
                             #add neighbor to the front queue
                         chamber_area[(new_x, new_y)] = current_chamber
                         current_chamber.space += 1
-                        new_chamber.positions.append((new_x, new_y))
+                        current_chamber.positions.append((new_x, new_y))
                         front_nodes.append((new_x, new_y))
                     elif chamber_area[(new_x, new_y)] == 0 and is_bottle_neck:
                         #Step 1-3: if neighbor without chamber and is an articulation point:
                             #create a new chamber and affect it to the neighbor
                             #set chamber size to 1
                             #add neighbor to the front queue
-                        new_chamber = Chamber((new_x, new_y))
+                        new_chamber = Chamber((new_x, new_y), current_chamber)
                         new_chamber.space = 1
+                        new_chamber.positions.append((new_x, new_y))
                         list_chambers.append(new_chamber)
 
-                        chamber_area[(new_x, new_y)] = current_chamber
-                        current_chamber.positions.append((new_x, new_y))
+                        chamber_area[(new_x, new_y)] = new_chamber
                         front_nodes.append((new_x, new_y))
                     else:
                         if chamber_area[(new_x, new_y)] == current_chamber:
@@ -195,27 +175,36 @@ def compute_tree_of_chambers(area, voronoi_area, current_position, previous_posi
                                 # merge the two chambers into the common parent
                             # do NOT add the neighbor to the front queue !
 
-                            smallest_chamber = current_chamber
-                            if current_chamber.space > chamber_area[(new_x, new_y)].space:
-                                smallest_chamber = chamber_area[(new_x, new_y)]
-                                biggest_chamber = current_chamber
-                            else:
-                                smallest_chamber = current_chamber
-                                biggest_chamber = chamber_area[(new_x, new_y)]
+                            if current_chamber != origin_chamber: parent_1 = current_chamber.parent
+                            else: parent_1 = current_chamber
+                            if chamber_area[(new_x, new_y)] != origin_chamber: parent_2 = chamber_area[(new_x, new_y)].parent
+                            else: parent_2 = chamber_area[(new_x, new_y)]
 
-                            for pos in biggest_chamber.positions:
-                                chamber_area[pos] = smallest_chamber
-                                smallest_chamber.positions.append(pos)
+                            while parent_1 != parent_2:
+                                if parent_1 != origin_chamber: parent_1 = parent_1.parent
+                                if parent_2 != origin_chamber: parent_2 = parent_2.parent
 
-                            smallest_chamber.space += biggest_chamber.space
-                            list_chambers.remove(biggest_chamber)
+                            if parent_1 != current_chamber:
+                                for pos in current_chamber.positions:
+                                    chamber_area[pos] = parent_1
+                                    parent_1.positions.append(pos)
+                                parent_1.space += current_chamber.space
+
+                            if parent_1 != chamber_area[(new_x, new_y)]:
+                                for pos in chamber_area[(new_x, new_y)].positions:
+                                    chamber_area[pos] = parent_1
+                                    parent_1.positions.append(pos)
+                                parent_1.space += chamber_area[(new_x, new_y)].space
+
+                            if current_chamber != origin_chamber: list_chambers.remove(current_chamber)
+                            if chamber_area[(new_x, new_y)] != origin_chamber: list_chambers.remove(chamber_area[(new_x, new_y)])
 
     #Step 2: Compute spaces between the different leaf chambers and root chamber
     #Step 3: Select best solution (more space => better solution)
     best_space = 0
     for chamber in list_chambers:
         current_space = 0
-        while chamber_area[chamber.entrance] != origin_chamber:
+        while chamber.parent != origin_chamber:
             current_space += chamber.space
 
         if best_space < current_space:
