@@ -13,7 +13,7 @@ SELECT_CONSTANT = 1.414213 #value from Wikipedia
 #SELECT_CONSTANT = 10 #value from paper
 NB_TURNS_CHECK = 10 #value from the paper
 A = 1 #value from the paper
-NB_MCTS_ITERATIONS = 100 #experimental
+NB_MCTS_ITERATIONS = 10 #experimental
 
 class Node:
     def __init__(self, parent, value):
@@ -45,9 +45,19 @@ class Node:
         #    self.nb_win += 1
         #    self.score = self.nb_win / self.number_visit
 
+        self.score *= self.number_visit
+
+        if value >= (space-value):
+            self.score += value/space
+        #else:
+        #    self.score -= value / space
+        self.number_visit += 1
+
+        '''    
         self.score = self.score * self.number_visit
         self.score += (space / 600)
         self.number_visit += 1
+        '''
         self.score = self.score / self.number_visit
 
 
@@ -153,10 +163,15 @@ class Node:
 
         # Check if it is an early end game
         if len(list_players) == 2:
-            #distance = compute_path(area, walls[my_index][-1], walls[1 - my_index][-1])
+            distance = compute_path(area, walls[my_index][-1], walls[1 - my_index][-1])
             voronoi_area, voronoi_spaces = compute_voronoi_area(area, current_positions, [0,1])
-            my_articulation_points = detect_articulation_points(area, initial_positions[my_index])
-            ennemy_articulation_points = detect_articulation_points(area, initial_positions[1-my_index])
+
+            if distance is None:
+                my_articulation_points = detect_articulation_points(area, initial_positions[my_index])
+                ennemy_articulation_points = my_articulation_points
+            else:
+                my_articulation_points = detect_articulation_points(area, initial_positions[my_index])
+                ennemy_articulation_points = detect_articulation_points(area, initial_positions[1 - my_index])
 
             if len(my_articulation_points ) > 0:
                 current_pos = walls[my_index][-1]
@@ -180,8 +195,8 @@ class Node:
             else:
                 ennemy_spaces = voronoi_spaces[1 - my_index]
 
-            #self.is_always_win = (my_spaces - ennemy_spaces) > 0
-            return self.is_always_win, my_spaces - ennemy_spaces
+            #self.is_always_win = (ennemy_spaces < my_spaces * 2) and distance is None
+            return my_spaces, my_spaces + ennemy_spaces
 
             '''
             if distance is None:  # Two players are separated
