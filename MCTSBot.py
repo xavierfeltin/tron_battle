@@ -194,6 +194,10 @@ class Node:
          Play the simulation
          :return:  True if wins, False otherwise
          '''
+
+         #TODO: correctly manage voronoi area
+         voronoi_area = ones((Configuration.MAX_X_GRID+1, Configuration.MAX_Y_GRID+1), dtype=int32)
+
          is_game_running = True
          is_win = True
          players = list_players[:]
@@ -242,6 +246,25 @@ class Node:
                 if nb_turns_check_separeted == 0:
                     # Check if it is an early end game
                     if len(list_players) == 2:
+
+                        articulation_points = detect_articulation_points(area, walls[my_index][-1])
+
+                        current_pos = walls[my_index][-1]
+                        if len(walls[my_index] < 2): previous_pos = (-1,-1)
+                        else: previous_pos = walls[my_index][-2]
+                        my_spaces = compute_tree_of_chambers(area, voronoi_area, articulation_points, current_pos, previous_pos)
+
+                        current_pos = walls[1-my_index][-1]
+                        if len(walls[1-my_index] < 2): previous_pos = (-1, -1)
+                        else: previous_pos = walls[1-my_index][-2]
+                        ennemy_spaces = compute_tree_of_chambers(area, voronoi_area, articulation_points, current_pos, previous_pos)
+
+                        is_win = (my_spaces - ennemy_spaces) > 0
+
+                        path = compute_path(area, walls[my_index][-1],walls[1-my_index][-1])
+                        is_game_running = path is None #Two players are separated
+
+                        '''
                         my_spaces, is_separated = process_availables_spaces(area, walls[my_index][-1], [walls[1 - my_index][-1]])
                         if is_separated:  # Two players are separated
                             ennemy_spaces, is_separated = process_availables_spaces(area, walls[1 - my_index][-1], walls[my_index][-1])
@@ -249,7 +272,7 @@ class Node:
                             # compute the number of cases for each player
                             is_game_running = False
                             is_win = (my_spaces - ennemy_spaces) > 0
-
+                        '''
                     nb_turns_check_separeted = NB_TURNS_CHECK
                 else:
                     nb_turns_check_separeted -= 1
@@ -499,23 +522,67 @@ def compute_path(area, root, goal):
     return None
 
 class Chamber:
-    def _init__(self, p_entrance):
+    def __init__(self, p_entrance, p_depth, p_parent = None):
         self.space = 0
         self.entrance = p_entrance
-        self.contains_battle_front = False
-        self.is_leaf = False
+        self.positions = deque() #help in case of merge
+        self.parent = p_parent
+        self.depth = p_depth
+        self.is_leaf = True
 
-def compute_tree_of_chambers(area, voronoi_area, last_positions, walls, player_index):
+def detect_articulation_points(area, root):
+    '''
+    Find the points that if were filled would separate the board.
+    DFS approach
+    https://en.wikipedia.org/wiki/Biconnected_component
+    :return: list of adjacent points
+    '''
+
+    class Node:
+        def __init__(self):
+            self.depth = None
+            self.low = None
+
+    visited_nodes =  zeros((Configuration.MAX_X_GRID+1, Configuration.MAX_Y_GRID+1), dtype=object)
+    parents = {}
+    available_directions = [[0, -1], [0, 1], [-1, 0], [1, 0]]
+    articulations = []
+
+    def f(vertex, p_depth):
+        depth = p_depth
+
+        node = Node()
+        node.depth = depth
+        node.low = depth
+        visited_nodes[vertex] = node
+
+        for off_x, off_y in available_directions:
+            new_x = vertex[0] + off_x
+            new_y = vertex[1] + off_y
+
+            if 0 <= new_x <= Configuration.MAX_X_GRID and 0 <= new_y <= Configuration.MAX_Y_GRID and not area[new_x, new_y]:
+                if visited_nodes[new_x, new_y] == 0:
+                    parents[(new_x, new_y)] = vertex
+                    f((new_x, new_y), p_depth + 1)
+
+                    if vertex != root and visited_nodes[new_x,new_y].low >= visited_nodes[vertex].depth and vertex not in articulations:
+                        articulations.append(vertex)
+
+                    visited_nodes[vertex].low = min(visited_nodes[vertex].low, visited_nodes[new_x, new_y].low)
+                elif vertex in parents and parents[vertex] != (new_x, new_y):
+                    visited_nodes[vertex].low = min(visited_nodes[vertex].low, visited_nodes[new_x, new_y].depth)
+
+    f(root,0)
+    return articulations
+
+def compute_tree_of_chambers(area, voronoi_area, articulation_points, current_position, previous_position):
     '''
     Compute the space available with the Tree of chambers algorithm
     '''
 
     list_chambers = []
-    list_articulation_points = []
 
-    chamber_area = zeros((Configuration.MAX_X_GRID+1, Configuration.MAX_Y_GRID+1), dtype=object)
-    visited_area = copy(area)
-
+    chamber_area = zeros((Configuration.MAX_X_GRID+1, Configuration.MAX_Y_GRID+1), dtype=object) #used as an equivalent of visited_area in BFS algorithm
     front_nodes = deque()
 
     available_directions = [[0, -1], [0, 1], [-1, 0], [1, 0]]
@@ -523,10 +590,15 @@ def compute_tree_of_chambers(area, voronoi_area, last_positions, walls, player_i
 
     #Step 0: Build first chamber and entrance is the step before the current position
     #note that chamber_area[previous_position] == None
-    new_chamber = Chamber(walls[player_index][-2])
+    new_chamber = Chamber(previous_position, 0)
     new_chamber.space = 1
-    chamber_area[last_positions[player_index]] = new_chamber
-    front_nodes.append(last_positions[player_index])
+    origin_chamber = new_chamber
+
+    chamber_area[current_position] = new_chamber
+    new_chamber.positions.append(current_position)
+    front_nodes.append(current_position)
+
+    depth = 1
 
     #Step 1: Search other chambers
     while len(front_nodes) > 0:
@@ -538,10 +610,10 @@ def compute_tree_of_chambers(area, voronoi_area, last_positions, walls, player_i
             new_x = x + off_x
             new_y = y + off_y
 
-            if 0 <= new_x <= Configuration.MAX_X_GRID and 0 <= new_y <= Configuration.MAX_Y_GRID:
+            if 0 <= new_x <= Configuration.MAX_X_GRID and 0 <= new_y <= Configuration.MAX_Y_GRID and not area[new_x, new_y]:
                 #Step 1-1: if neighbor not in voronoi area of the player => ignore it !
                 if numpy.sign(voronoi_area[cur]) > 0:
-                    is_bottle_neck = is_articulation_point(area, (new_x, new_y), (off_x*-1, off_y*-1))
+                    is_bottle_neck = (new_x, new_y) in articulation_points
 
                     if chamber_area[(new_x, new_y)] == 0 and not is_bottle_neck:
                         #Step 1-2: if neighbor without chamber and not articulation point:
@@ -550,66 +622,55 @@ def compute_tree_of_chambers(area, voronoi_area, last_positions, walls, player_i
                             #add neighbor to the front queue
                         chamber_area[(new_x, new_y)] = current_chamber
                         current_chamber.space += 1
+                        current_chamber.positions.append((new_x, new_y))
                         front_nodes.append((new_x, new_y))
                     elif chamber_area[(new_x, new_y)] == 0 and is_bottle_neck:
                         #Step 1-3: if neighbor without chamber and is an articulation point:
                             #create a new chamber and affect it to the neighbor
                             #set chamber size to 1
                             #add neighbor to the front queue
-                        new_chamber = Chamber((new_x, new_y))
-                        new_chamber.space = 1
+                        depth += 1
+                        new_chamber = Chamber((new_x, new_y), depth, current_chamber)
+                        new_chamber.space = 0
+                        new_chamber.positions.append((new_x, new_y))
+                        list_chambers.append(new_chamber)
+
                         chamber_area[(new_x, new_y)] = new_chamber
+                        current_chamber.is_leaf = False
                         front_nodes.append((new_x, new_y))
                     else:
-                        #Step 1-4: if neighbor associated with the current chamber (or entrance of the current chamber) => ignore it !
-                        #Step 1-5: if neighbor associated with a chamber different from the current chamber and not the entrance of the current chamber
+                        if chamber_area[(new_x, new_y)] == current_chamber:
+                            # Step 1-4: if neighbor associated with the current chamber (or entrance of the current chamber) => ignore it !
+                            pass
+                        elif chamber_area[(new_x, new_y)] != origin_chamber and current_chamber != origin_chamber and chamber_area[(new_x, new_y)] != current_chamber and chamber_area[(new_x, new_y)] != 0 and current_chamber.entrance != (new_x, new_y):
+                            #Step 1-5: if neighbor associated with a chamber different from the current chamber and not the entrance of the current chamber
                             # merge current chamber and neighbor chamber:
                                 # identify the lowest common parent chamber
                                 # merge the two chambers into the common parent
                             # do NOT add the neighbor to the front queue !
 
+                            pass
+
     #Step 2: Compute spaces between the different leaf chambers and root chamber
     #Step 3: Select best solution (more space => better solution)
+    best_space = 0
+    for chamber in list_chambers:
+        if chamber.is_leaf:
+            current_space = 0
+            parent = chamber.parent
+            new_chamber = chamber
+            while parent != origin_chamber:
+                current_space += new_chamber.space
+                new_chamber = parent
+                parent = parent.parent
 
-                directions = [[0, -1], [0, 1], [-1, 0], [1, 0]]
-                directions.remove([off_x, off_y])
+            if best_space < current_space:
+                best_space = current_space
 
-                #Detect if the case is an articulation point
-                #Improvement: store articulation point information directly when moving players
-                free_space = 0
-                for off_x2, off_y2 in directions:
-                    new_x2 = new_x + off_x2
-                    new_y2 = new_y + off_y2
-                    if 0 <= new_x2 <= Configuration.MAX_X_GRID and 0 <= new_y2 <= Configuration.MAX_Y_GRID and area[new_x2, new_y2] == 0: free_space+=1
+    #No other chambers than the origin one
+    best_space += origin_chamber.space
 
-                if free_space == 1:
-                    list_articulation_points.append((new_x2, new_y2))
-                    new_chamber = Chamber((new_x2, new_y2))
-
-                visited_area[new_x, new_y] = 1
-
-    return nb_spaces
-
-def is_articulation_point(area, position, prev_off):
-    '''
-    True if the point is an articulation point (only node to connect another part of the graph)
-    :param area: current state of the graph
-    :param position: position to test
-    :param prev_off: previous position coming from to ignore when computing space
-    :return: True if it is an articulation point
-    '''
-    available_directions = [[0, -1], [0, 1], [-1, 0], [1, 0]]
-    available_directions.remove(prev_off)
-
-    # Detect if the case is an articulation point
-    # Improvement: store articulation point information directly when moving players
-    free_space = 0
-    for off_x, off_y in available_directions:
-        new_x = position[0] + off_x
-        new_y = position[1] + off_y
-        if 0 <= new_x <= Configuration.MAX_X_GRID and 0 <= new_y <= Configuration.MAX_Y_GRID and area[new_x, new_y] == 0: free_space += 1
-
-    return free_space == 1
+    return best_space
 
 class MCTSBot():
     def __init__(self):

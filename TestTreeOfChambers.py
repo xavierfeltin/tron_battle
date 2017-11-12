@@ -108,9 +108,9 @@ class TestTreeOfChambers(unittest.TestCase):
                 area[i,j] = 1
 
         points = detect_articulation_points(area, (0, 0))
-        self.assertEqual(len(points), 12)
+        self.assertEqual(len(points), 5)
 
-        expected_articulations = [(2, 0), (3, 0), (4, 0), (5, 0), (6, 0), (7, 0), (8, 0), (9, 0), (10, 0), (8, 3), (9, 3), (10, 3)]
+        expected_articulations = [(7, 9), (4, 7), (5, 7), (8, 7), (8, 8)]
         for articulation in points:
             self.assertTrue(articulation in expected_articulations)
 
@@ -122,14 +122,14 @@ class TestTreeOfChambers(unittest.TestCase):
         articulations = detect_articulation_points(area, current_pos)
         nb_spaces = compute_tree_of_chambers(area, voronoi, articulations, current_pos, (-1,-1))
 
-        self.assertEqual(nb_spaces, (Configuration.MAX_X_GRID+1) * (Configuration.MAX_Y_GRID+1) -1)
+        self.assertEqual(nb_spaces, (Configuration.MAX_X_GRID+1) * (Configuration.MAX_Y_GRID+1))
 
     def test_compute_tree_of_one_chamber(self):
         area = zeros((Configuration.MAX_X_GRID + 1, Configuration.MAX_Y_GRID + 1), dtype=bool)
         for i in range(0, 8): area[3, i] = 1
         for i in range(3, 10): area[i, 7] = 1
         for i in range(0, 3): area[9, i] = 1
-        for i in range(4, 10): area[9, i] = 1
+        for i in range(4, 8): area[9, i] = 1
 
         voronoi = ones((Configuration.MAX_X_GRID + 1, Configuration.MAX_Y_GRID + 1), dtype=int32)
         current_pos = (15, 15)
@@ -137,4 +137,42 @@ class TestTreeOfChambers(unittest.TestCase):
         articulations = detect_articulation_points(area, current_pos)
         nb_spaces = compute_tree_of_chambers(area, voronoi, articulations, current_pos, (-1, -1))
 
-        self.assertEqual(nb_spaces, 579-len(articulations))
+        self.assertEqual(nb_spaces, 577)
+
+    def test_compute_tree_of_choice_chamber(self):
+        area = zeros((Configuration.MAX_X_GRID + 1, Configuration.MAX_Y_GRID + 1), dtype=bool)
+        for i in range(1, 14): area[i, 6] = 1
+        for i in range(7, 19): area[1, i] = 1
+        for i in range(7, 19): area[13, i] = 1
+        for i in range(2, 6): area[i, 18] = 1
+        for i in range(10, 19): area[5, i] = 1
+        for i in range(6, 11): area[i, 10] = 1
+        for i in range(8, 19): area[10, i] = 1
+        for i in range(11, 14): area[i, 18] = 1
+        area[12, 7] = 1
+
+        voronoi = ones((Configuration.MAX_X_GRID + 1, Configuration.MAX_Y_GRID + 1), dtype=int32)
+        current_pos = (11, 7)
+
+        articulations = detect_articulation_points(area, current_pos)
+        nb_spaces = compute_tree_of_chambers(area, voronoi, articulations, current_pos, (7, 12))
+
+        self.assertEqual(nb_spaces, 48)
+
+    def test_compute_tree_of_complex_choice_chamber(self):
+        area = zeros((Configuration.MAX_X_GRID + 1, Configuration.MAX_Y_GRID + 1), dtype=bool)
+        for i in range(0, 11): area[i, 5] = 1
+        for i in range(12, 23): area[i, 5] = 1
+        for i in range(0, 13): area[i, 9] = 1
+        for i in range(1, 6): area[4, i] = 1
+        for i in range(1, 6): area[10, i] = 1
+        for i in range(1, 12): area[12, i] = 1
+        for i in range(0, 6): area[22, i] = 1
+
+        voronoi = ones((Configuration.MAX_X_GRID + 1, Configuration.MAX_Y_GRID + 1), dtype=int32)
+        current_pos = (11, 0)
+
+        articulations = detect_articulation_points(area, current_pos)
+        nb_spaces = compute_tree_of_chambers(area, voronoi, articulations, current_pos, (-1, -1))
+
+        self.assertEqual(nb_spaces, 45)

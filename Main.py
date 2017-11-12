@@ -4,7 +4,7 @@ from GameFrame import GameFrame
 from GameEngine import GameEngine
 from RandomBot import RandomBot
 from ExplicitBot import ExplicitBot
-#from MCTSBot import MCTSBot
+from MCTSBot import MCTSBot
 from time import sleep
 
 NB_PLAYERS = 2
@@ -29,7 +29,7 @@ if __name__ == "__main__":
     engine = GameEngine(NB_PLAYERS)
 
     players = []
-    players.append(ExplicitBot())
+    players.append(MCTSBot())
     for i in range(NB_PLAYERS-1):
         players.append(ExplicitBot())
 
