@@ -101,10 +101,12 @@ class Node:
             walls[player] = []
 
             if player == my_index:
-                area[self.value[0][0], self.value[0][1]] = Configuration.WALL_CODE
+                #area[self.value[0][0], self.value[0][1]] = Configuration.WALL_CODE
+                area[self.value[0][0], self.value[0][1]] = 0
                 walls[player].append(self.value[0])
             else:
-                area[current_positions[player]] = Configuration.WALL_CODE
+                #area[current_positions[player]] = Configuration.WALL_CODE
+                area[current_positions[player]] = 0
                 walls[player].append(current_positions[player])
 
         #Playout random moves for ennemies after that
@@ -151,8 +153,37 @@ class Node:
 
         # Check if it is an early end game
         if len(list_players) == 2:
-            distance = compute_path(area, walls[my_index][-1], walls[1 - my_index][-1])
+            #distance = compute_path(area, walls[my_index][-1], walls[1 - my_index][-1])
+            voronoi_area, voronoi_spaces = compute_voronoi_area(area, current_positions, [0,1])
+            my_articulation_points = detect_articulation_points(area, initial_positions[my_index])
+            ennemy_articulation_points = detect_articulation_points(area, initial_positions[1-my_index])
 
+            if len(my_articulation_points ) > 0:
+                current_pos = walls[my_index][-1]
+                if len(walls[my_index]) < 2:
+                    previous_pos = (-1, -1)
+                else:
+                    previous_pos = walls[my_index][-2]
+                my_spaces = compute_tree_of_chambers(area, voronoi_area, my_articulation_points , current_pos, previous_pos,1)
+            else:
+                my_spaces = voronoi_spaces[my_index]
+
+            if len(ennemy_articulation_points) > 0:
+                current_pos = walls[1 - my_index][-1]
+                if len(walls[1 - my_index]) < 2:
+                    previous_pos = (-1, -1)
+                else:
+                    previous_pos = walls[1 - my_index][-2]
+
+                ennemy_spaces = compute_tree_of_chambers(area, voronoi_area, ennemy_articulation_points, current_pos,
+                                                         previous_pos, 2)
+            else:
+                ennemy_spaces = voronoi_spaces[1 - my_index]
+
+            #self.is_always_win = (my_spaces - ennemy_spaces) > 0
+            return self.is_always_win, my_spaces - ennemy_spaces
+
+            '''
             if distance is None:  # Two players are separated
                 my_spaces, is_separated = process_availables_spaces(area, walls[my_index][-1], [walls[1 - my_index][-1]])
                 ennemy_spaces, is_separated = process_availables_spaces(area, walls[1 - my_index][-1], walls[my_index][-1])
@@ -160,7 +191,7 @@ class Node:
                 # compute the number of cases for each player
                 self.is_end_game = True
                 self.is_always_win = (my_spaces - ennemy_spaces) > 0
-                return self.is_always_win, my_spaces
+                
             else:
                 #Use Voronoi for now
                 #voronoi = compute_voronoi(area, current_positions, list_players)
@@ -169,12 +200,14 @@ class Node:
                 voronoi = compute_voronoi_bfs(area, current_positions, list_players)
                 print('voronoi: ' + str((time()-start)*1000), flush=True)
                 space_max = 0
+
                 winner = None
                 for player, space in voronoi.items():
                     if space > space_max:
                         winner = player
 
                 return winner == my_index, voronoi[my_index]
+            '''
         else:
             # Use Voronoi for now
             #voronoi = compute_voronoi(area, current_positions, list_players)
@@ -460,8 +493,10 @@ def compute_voronoi_bfs(area, last_positions, list_players):
         cur = front_nodes.popleft()
         x, y = cur[0], cur[1]
 
-        if voronoi_area[x, y] > 0: sign = 1
-        else: sign = -1
+        if voronoi_area[x, y] > 0:
+            sign = 1
+        else:
+            sign = -1
 
         neighbor_value = voronoi_area[x, y] + sign
         other_neighbor = neighbor_value * -1
@@ -476,13 +511,55 @@ def compute_voronoi_bfs(area, last_positions, list_players):
                 if next_value == 0:
                     voronoi_area[new_x, new_y] = neighbor_value
                     front_nodes.append((new_x, new_y))
-                    if sign == 1: voronoi[0] += 1
-                    else: voronoi[1] += 1
+                    if sign == 1:
+                        voronoi[0] += 1
+                    else:
+                        voronoi[1] += 1
                 elif next_value == other_neighbor:
                     voronoi_area[new_x, new_y] = Configuration.NEUTRAL_CODE
                     voronoi[Configuration.NEUTRAL_CODE] += 1
 
     return voronoi
+
+def compute_voronoi_area(area, last_positions, list_players):
+
+    voronoi_area = zeros((Configuration.MAX_X_GRID+1, Configuration.MAX_Y_GRID+1),dtype=int32)
+    voronoi_area[last_positions[0]] = list_players[0] + 1
+    voronoi_area[last_positions[1]] = list_players[1] + 1
+
+    voronoi = {}
+    for i in list_players:
+        voronoi[i] = 1
+    voronoi[Configuration.NEUTRAL_CODE] = 0
+
+    front_nodes = deque()
+    front_nodes.append(last_positions[0])
+    front_nodes.append(last_positions[1])
+
+    available_directions = [[0, -1], [0, 1], [-1, 0], [1, 0]]
+    while len(front_nodes) > 0:
+        cur = front_nodes.popleft()
+        x, y = cur[0], cur[1]
+
+        neighbor_value = voronoi_area[x, y]
+
+        if neighbor_value != Configuration.NEUTRAL_CODE:
+            for off_x, off_y in available_directions:
+                new_x = x + off_x
+                new_y = y + off_y
+
+                if 0 <= new_x <= Configuration.MAX_X_GRID and 0 <= new_y <= Configuration.MAX_Y_GRID and not area[new_x, new_y]:
+                    next_value = voronoi_area[new_x, new_y]
+
+                    if next_value == 0:
+                        voronoi_area[new_x, new_y] = neighbor_value
+                        voronoi[neighbor_value-1] += 1
+                        front_nodes.append((new_x, new_y))
+                    elif next_value != 0 and next_value != neighbor_value:
+                        voronoi_area[new_x, new_y] = Configuration.NEUTRAL_CODE
+                        voronoi[Configuration.NEUTRAL_CODE] += 1
+
+    return voronoi_area, voronoi
 
 def heuristic(cell, goal):
     '''
@@ -575,7 +652,7 @@ def detect_articulation_points(area, root):
     f(root,0)
     return articulations
 
-def compute_tree_of_chambers(area, voronoi_area, articulation_points, current_position, previous_position):
+def compute_tree_of_chambers(area, voronoi_area, articulation_points, current_position, previous_position, voronoi_index_player):
     '''
     Compute the space available with the Tree of chambers algorithm
     '''
@@ -612,7 +689,8 @@ def compute_tree_of_chambers(area, voronoi_area, articulation_points, current_po
 
             if 0 <= new_x <= Configuration.MAX_X_GRID and 0 <= new_y <= Configuration.MAX_Y_GRID and not area[new_x, new_y]:
                 #Step 1-1: if neighbor not in voronoi area of the player => ignore it !
-                if numpy.sign(voronoi_area[cur]) > 0:
+                #if numpy.sign(voronoi_area[cur]) > 0:
+                if voronoi_area[cur] == voronoi_index_player:
                     is_bottle_neck = (new_x, new_y) in articulation_points
 
                     if chamber_area[(new_x, new_y)] == 0 and not is_bottle_neck:
