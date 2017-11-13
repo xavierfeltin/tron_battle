@@ -13,10 +13,10 @@ SELECT_CONSTANT = 1.414213 #value from Wikipedia
 #SELECT_CONSTANT = 10 #value from paper
 NB_TURNS_CHECK = 10 #value from the paper
 A = 1 #value from the paper
-NB_MCTS_ITERATIONS = 10 #experimental
+NB_MCTS_ITERATIONS = 40 #experimental
 
 class Node:
-    def __init__(self, parent, value):
+    def __init__(self, parent, value, is_separeted):
         self.score = 0.0
         self.nb_win = 0
         self.number_visit = 1
@@ -24,6 +24,7 @@ class Node:
         self.is_always_win = False
         self.children = []
         self.parent = parent
+        self.is_separeted = is_separeted
 
         if parent is None:
             self.depth = 0
@@ -33,8 +34,8 @@ class Node:
             self.value.append(value)
             self.depth = parent.depth + 1
 
-    def add_child(self, value):
-        self.children.append(Node(self, value))
+    def add_child(self, value, is_separeted):
+        self.children.append(Node(self, value, is_separeted))
 
     def back_propagate(self, value, space):
         '''
@@ -163,36 +164,44 @@ class Node:
 
         # Check if it is an early end game
         if len(list_players) == 2:
-            distance = compute_path(area, walls[my_index][-1], walls[1 - my_index][-1])
             voronoi_area, voronoi_spaces = compute_voronoi_area(area, current_positions, [0,1])
 
-            if distance is None:
-                my_articulation_points = detect_articulation_points(area, initial_positions[my_index])
-                ennemy_articulation_points = my_articulation_points
-            else:
-                my_articulation_points = detect_articulation_points(area, initial_positions[my_index])
-                ennemy_articulation_points = detect_articulation_points(area, initial_positions[1 - my_index])
-
-            if len(my_articulation_points ) > 0:
-                current_pos = walls[my_index][-1]
-                if len(walls[my_index]) < 2:
-                    previous_pos = (-1, -1)
+            if len(walls[list_players[0]]) >= 10:
+                if not self.is_separeted:
+                    distance = compute_path(area, walls[my_index][-1], walls[1 - my_index][-1])
                 else:
-                    previous_pos = walls[my_index][-2]
-                my_spaces = compute_tree_of_chambers(area, voronoi_area, my_articulation_points , current_pos, previous_pos,1)
+                    distance = None
+
+                if distance is None:
+                    my_articulation_points = detect_articulation_points(area, initial_positions[my_index])
+                    ennemy_articulation_points = my_articulation_points
+                else:
+                    my_articulation_points = detect_articulation_points(area, initial_positions[my_index])
+                    ennemy_articulation_points = detect_articulation_points(area, initial_positions[1 - my_index])
+
+                if len(my_articulation_points ) > 0:
+                    current_pos = walls[my_index][-1]
+                    if len(walls[my_index]) < 2:
+                        previous_pos = (-1, -1)
+                    else:
+                        previous_pos = walls[my_index][-2]
+                    my_spaces = compute_tree_of_chambers(area, voronoi_area, my_articulation_points , current_pos, previous_pos,1)
+                else:
+                    my_spaces = voronoi_spaces[my_index]
+
+                if len(ennemy_articulation_points) > 0:
+                    current_pos = walls[1 - my_index][-1]
+                    if len(walls[1 - my_index]) < 2:
+                        previous_pos = (-1, -1)
+                    else:
+                        previous_pos = walls[1 - my_index][-2]
+
+                    ennemy_spaces = compute_tree_of_chambers(area, voronoi_area, ennemy_articulation_points, current_pos,
+                                                             previous_pos, 2)
+                else:
+                    ennemy_spaces = voronoi_spaces[1 - my_index]
             else:
                 my_spaces = voronoi_spaces[my_index]
-
-            if len(ennemy_articulation_points) > 0:
-                current_pos = walls[1 - my_index][-1]
-                if len(walls[1 - my_index]) < 2:
-                    previous_pos = (-1, -1)
-                else:
-                    previous_pos = walls[1 - my_index][-2]
-
-                ennemy_spaces = compute_tree_of_chambers(area, voronoi_area, ennemy_articulation_points, current_pos,
-                                                         previous_pos, 2)
-            else:
                 ennemy_spaces = voronoi_spaces[1 - my_index]
 
             #self.is_always_win = (ennemy_spaces < my_spaces * 2) and distance is None
@@ -348,7 +357,7 @@ class Node:
             new_y = last_position[1] + y
 
             if 0 <= new_x <= Configuration.MAX_X_GRID and 0 <= new_y <= Configuration.MAX_Y_GRID and area[new_x, new_y] == 0:
-                self.add_child((new_x, new_y))
+                self.add_child((new_x, new_y), self.is_separeted)
 
 def compute_MCTS(area, cur_cycles, list_players, my_index):
     '''
@@ -357,7 +366,7 @@ def compute_MCTS(area, cur_cycles, list_players, my_index):
     '''
 
     current_position = cur_cycles[my_index]
-    tree = Node(None, current_position)
+    tree = Node(None, current_position, False)
     tree.expansion(area)
 
     nb_iteration = NB_MCTS_ITERATIONS
