@@ -174,10 +174,10 @@ class Node:
 
                 if distance is None:
                     my_articulation_points = detect_articulation_points(area, initial_positions[my_index])
-                    ennemy_articulation_points = my_articulation_points
+                    ennemy_articulation_points = detect_articulation_points(area, initial_positions[1 - my_index])
                 else:
                     my_articulation_points = detect_articulation_points(area, initial_positions[my_index])
-                    ennemy_articulation_points = detect_articulation_points(area, initial_positions[1 - my_index])
+                    ennemy_articulation_points = my_articulation_points
 
                 if len(my_articulation_points ) > 0:
                     current_pos = walls[my_index][-1]
