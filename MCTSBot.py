@@ -97,7 +97,7 @@ class Node:
         else:
             return self
 
-    def initialize_play_out(self, context_area, current_positions, players, my_index):
+    def initialize_play_out(self, context_area, current_positions, previous_moves, players, my_index):
         '''
         Initialize the area with the previous positions of each cycles
         :return: the area at the current state of the game
@@ -107,23 +107,21 @@ class Node:
         area = numpy.copy(context_area)
         walls = {}
 
-        #Set first real positions
         for player in players:
-            walls[player] = []
+            # Set past real positions for all players positions
+            walls[player] = previous_moves[player][:]
 
+            #Set current real position
             if player == my_index:
-                #area[self.value[0][0], self.value[0][1]] = Configuration.WALL_CODE
-                area[self.value[0][0], self.value[0][1]] = 0
+                area[self.value[0]] = 0
                 walls[player].append(self.value[0])
             else:
-                #area[current_positions[player]] = Configuration.WALL_CODE
                 area[current_positions[player]] = 0
                 walls[player].append(current_positions[player])
 
-        #Playout random moves for ennemies after that
-        nb_values = len(self.value)
-        for index in range(1, nb_values):
-            for player in players:
+            #Set decided positions for main player and random moves for ennemies
+            nb_values = len(self.value)
+            for index in range(1, nb_values):
                 if player == my_index:
                     area[self.value[index]] = Configuration.WALL_CODE
                     walls[player].append(self.value[index])
@@ -155,8 +153,11 @@ class Node:
         else:
             return current_position #return nevertheless a valid position
 
-    def play_out_by_heuristics(self, context_area, initial_positions, list_players, my_index):
-        area, walls = self.initialize_play_out(context_area, initial_positions, list_players, my_index)
+    def play_out_by_heuristics(self, context_area, initial_positions, previous_moves, list_players, my_index):
+
+        start = time()
+        area, walls = self.initialize_play_out(context_area, initial_positions, previous_moves, list_players, my_index)
+        print('initialize play out: ' + str((time()-start)*1000), flush = True)
 
         current_positions = []
         for i in range(len(list_players)):
@@ -164,40 +165,66 @@ class Node:
 
         # Check if it is an early end game
         if len(list_players) == 2:
+            start = time()
             voronoi_area, voronoi_spaces = compute_voronoi_area(area, current_positions, [0,1])
+            print('compute voronoi space: ' + str((time() - start) * 1000), flush=True)
 
             if len(walls[list_players[0]]) >= 10:
                 if not self.is_separeted:
-                    distance = compute_path(area, walls[my_index][-1], walls[1 - my_index][-1])
+                    start = time()
+                    distance = compute_path(area, current_positions[my_index], current_positions[1 - my_index])
+                    print('compute separation A*: ' + str((time() - start) * 1000), flush=True)
                 else:
                     distance = None
+                    self.is_separeted = True
+                    self.is_end_game = True
 
-                if distance is None:
+                if self.is_separeted:
                     my_articulation_points = detect_articulation_points(area, initial_positions[my_index])
                     ennemy_articulation_points = detect_articulation_points(area, initial_positions[1 - my_index])
                 else:
+                    start = time()
                     my_articulation_points = detect_articulation_points(area, initial_positions[my_index])
+                    print('compute articulation points: ' + str((time() - start) * 1000), flush=True)
                     ennemy_articulation_points = my_articulation_points
 
-                if len(my_articulation_points ) > 0:
-                    current_pos = walls[my_index][-1]
+                is_in_territory = False
+                if self.is_separeted:
+                    is_in_territory = len(my_articulation_points) > 0
+                else:
+                    for articulation in my_articulation_points:
+                        if voronoi_area[articulation] == 1:
+                            is_in_territory = True
+                            break
+
+                if is_in_territory:
                     if len(walls[my_index]) < 2:
                         previous_pos = (-1, -1)
                     else:
                         previous_pos = walls[my_index][-2]
-                    my_spaces = compute_tree_of_chambers(area, voronoi_area, my_articulation_points , current_pos, previous_pos,1)
+
+                    start = time()
+                    my_spaces = compute_tree_of_chambers(area, voronoi_area, my_articulation_points , current_positions[my_index], previous_pos,1)
+                    print('compute my tree of chambers: ' + str((time() - start) * 1000), flush=True)
                 else:
                     my_spaces = voronoi_spaces[my_index]
 
-                if len(ennemy_articulation_points) > 0:
-                    current_pos = walls[1 - my_index][-1]
+                is_in_territory = False
+                if self.is_separeted:
+                    is_in_territory = len(ennemy_articulation_points) > 0
+                else:
+                    for articulation in ennemy_articulation_points:
+                        if voronoi_area[articulation] == 2:
+                            is_in_territory = True
+                            break
+
+                if is_in_territory:
                     if len(walls[1 - my_index]) < 2:
                         previous_pos = (-1, -1)
                     else:
                         previous_pos = walls[1 - my_index][-2]
 
-                    ennemy_spaces = compute_tree_of_chambers(area, voronoi_area, ennemy_articulation_points, current_pos,
-                                                             previous_pos, 2)
+                    ennemy_spaces = compute_tree_of_chambers(area, voronoi_area, ennemy_articulation_points, current_positions[1-my_index], previous_pos, 2)
                 else:
                     ennemy_spaces = voronoi_spaces[1 - my_index]
             else:
@@ -207,31 +234,6 @@ class Node:
             #self.is_always_win = (ennemy_spaces < my_spaces * 2) and distance is None
             return my_spaces, my_spaces + ennemy_spaces
 
-            '''
-            if distance is None:  # Two players are separated
-                my_spaces, is_separated = process_availables_spaces(area, walls[my_index][-1], [walls[1 - my_index][-1]])
-                ennemy_spaces, is_separated = process_availables_spaces(area, walls[1 - my_index][-1], walls[my_index][-1])
-
-                # compute the number of cases for each player
-                self.is_end_game = True
-                self.is_always_win = (my_spaces - ennemy_spaces) > 0
-                
-            else:
-                #Use Voronoi for now
-                #voronoi = compute_voronoi(area, current_positions, list_players)
-
-                start = time()
-                voronoi = compute_voronoi_bfs(area, current_positions, list_players)
-                print('voronoi: ' + str((time()-start)*1000), flush=True)
-                space_max = 0
-
-                winner = None
-                for player, space in voronoi.items():
-                    if space > space_max:
-                        winner = player
-
-                return winner == my_index, voronoi[my_index]
-            '''
         else:
             # Use Voronoi for now
             #voronoi = compute_voronoi(area, current_positions, list_players)
@@ -245,98 +247,6 @@ class Node:
                 if space > space_max:
                     winner = player
             return winner == my_index, voronoi[my_index]
-
-    def play_out(self, context_area, initial_positions, list_players, my_index):
-         '''
-         Play the simulation
-         :return:  True if wins, False otherwise
-         '''
-
-         #TODO: correctly manage voronoi area
-         voronoi_area = ones((Configuration.MAX_X_GRID+1, Configuration.MAX_Y_GRID+1), dtype=int32)
-
-         is_game_running = True
-         is_win = True
-         players = list_players[:]
-         area, walls = self.initialize_play_out(context_area, initial_positions, players, my_index)
-
-         #Check if it is an early end game
-         if len(list_players) == 2:
-             my_spaces, is_separated = process_availables_spaces(area, walls[my_index][-1], [walls[1-my_index][-1]])
-             if is_separated: #Two players are separated
-                ennemy_spaces, is_separated= process_availables_spaces(area, walls[1-my_index][-1],walls[my_index][-1])
-
-                #compute the number of cases for each player
-                self.is_end_game = True
-                self.is_always_win = (my_spaces - ennemy_spaces) > 0
-                return self.is_always_win, 0
-
-         players_game_over = []
-         nb_turns_check_separeted = NB_TURNS_CHECK
-         turn = 0
-         while is_game_running:
-            #Start next step of the game
-            for player in players:
-                position = self.process_random_position(area, walls[player][-1])
-
-                if area[position]:
-                    area[position] = Configuration.WALL_CODE
-                    walls[player].append(position)
-                else:
-                    players_game_over.append(player)
-                    for wall in walls[player]:
-                        area[wall] = 0
-                    #del self.walls[player] => not mandatory to clean the variables here ...
-
-            for player in players_game_over:
-                players.remove(player)
-                players_game_over.remove(player)
-                if player == my_index: #can stop the simulation here
-                    is_game_running = False
-                    is_win = False
-
-            if len(players) <= 1:
-               is_game_running = False
-            else:
-                # TODO: add heuristics Voronoi, tree of chambers, ... to anticipate the end of the game
-                # Check the state of the game
-                if nb_turns_check_separeted == 0:
-                    # Check if it is an early end game
-                    if len(list_players) == 2:
-
-                        articulation_points = detect_articulation_points(area, walls[my_index][-1])
-
-                        current_pos = walls[my_index][-1]
-                        if len(walls[my_index] < 2): previous_pos = (-1,-1)
-                        else: previous_pos = walls[my_index][-2]
-                        my_spaces = compute_tree_of_chambers(area, voronoi_area, articulation_points, current_pos, previous_pos)
-
-                        current_pos = walls[1-my_index][-1]
-                        if len(walls[1-my_index] < 2): previous_pos = (-1, -1)
-                        else: previous_pos = walls[1-my_index][-2]
-                        ennemy_spaces = compute_tree_of_chambers(area, voronoi_area, articulation_points, current_pos, previous_pos)
-
-                        is_win = (my_spaces - ennemy_spaces) > 0
-
-                        path = compute_path(area, walls[my_index][-1],walls[1-my_index][-1])
-                        is_game_running = path is None #Two players are separated
-
-                        '''
-                        my_spaces, is_separated = process_availables_spaces(area, walls[my_index][-1], [walls[1 - my_index][-1]])
-                        if is_separated:  # Two players are separated
-                            ennemy_spaces, is_separated = process_availables_spaces(area, walls[1 - my_index][-1], walls[my_index][-1])
-
-                            # compute the number of cases for each player
-                            is_game_running = False
-                            is_win = (my_spaces - ennemy_spaces) > 0
-                        '''
-                    nb_turns_check_separeted = NB_TURNS_CHECK
-                else:
-                    nb_turns_check_separeted -= 1
-
-                turn += 1
-
-         return is_win, turn
 
     def expansion(self, context_area):
         '''
@@ -359,7 +269,7 @@ class Node:
             if 0 <= new_x <= Configuration.MAX_X_GRID and 0 <= new_y <= Configuration.MAX_Y_GRID and area[new_x, new_y] == 0:
                 self.add_child((new_x, new_y), self.is_separeted)
 
-def compute_MCTS(area, cur_cycles, list_players, my_index):
+def compute_MCTS(area, cur_cycles, previous_moves, list_players, my_index):
     '''
     Compute the MCTS tree from the current situation
     :return: direction to take for this simulation step
@@ -380,7 +290,8 @@ def compute_MCTS(area, cur_cycles, list_players, my_index):
             #is_win, nb_turn = selected_node.play_out(area, cur_cycles, list_players, my_index)
             #if nb_turn > 0: selected_node.expansion(area)
 
-            is_win, space = selected_node.play_out_by_heuristics(area, cur_cycles, list_players, my_index)
+            is_win, space = selected_node.play_out_by_heuristics(area, cur_cycles, previous_moves, list_players, my_index)
+            if selected_node.is_separeted: selected_node.is_always_win = is_win
             if not selected_node.is_end_game: selected_node.expansion(area)
 
         selected_node.back_propagate(is_win, space)
@@ -403,90 +314,6 @@ def compute_MCTS(area, cur_cycles, list_players, my_index):
         else: return ''
     else:
         return ''
-
-
-def process_availables_spaces(p_area, root, players_position, player_pos = None):
-    nb_spaces = 0
-    front_nodes = deque()
-
-    area = numpy.copy(p_area)
-    area[root] = 0
-
-    if player_pos is not None:
-        area[player_pos] = 0
-
-    front_nodes.append(root)
-    is_space_shared = True
-    available_directions = [[0, -1], [0, 1], [-1, 0], [1, 0]]
-
-    while len(front_nodes) > 0:
-        nb_spaces += 1
-        cur = front_nodes.popleft()
-
-        for off_x, off_y in available_directions:
-            new_x = cur[0] + off_x
-            new_y = cur[1] + off_y
-
-            if 0 <= new_x < 30 and 0 <= new_y < 20 and area[new_x, new_y]==0:
-                area[new_x, new_y] = Configuration.WALL_CODE
-                front_nodes.append((new_x, new_y))
-
-                for position in players_position:
-                    is_space_shared = is_space_shared and (position == (new_x, new_y))
-
-    return nb_spaces, is_space_shared
-
-def recursive_flood_fill(p_area, root):
-    area = numpy.copy(p_area)
-    area[root] = 0
-
-    return fill(p_area, root)
-
-def fill(area, position):
-    if area[position]:
-        area[position] = Configuration.WALL_CODE
-
-        nb_count = 1
-        nb_count += fill(area, (position[0] + 1, position[1]))
-        nb_count += fill(area, (position[0] - 1, position[1]))
-        nb_count += fill(area, (position[0], position[1]+1))
-        nb_count += fill(area, (position[0], position[1]-1))
-
-        return nb_count
-    else:
-        return 0
-
-def compute_voronoi(area, cycles, list_players):
-    voronoi_cells = {}
-    for i in list_players:
-        voronoi_cells[i] = 0
-
-    for i in range(30):
-        for j in range(20):
-            if area[i,j] == 0:
-                distances = {}
-                closest_cycle = None
-                is_limit = False
-
-                for k in list_players:
-                    distances[k] = abs(i - cycles[k][0]) + abs(j - cycles[k][1])
-
-                    if closest_cycle is None:
-                        closest_cycle = k
-                    elif distances[k] < distances[closest_cycle]:
-                        closest_cycle = k
-                    elif distances[k] == distances[closest_cycle]:
-                        is_limit = True
-                        break
-
-                if not is_limit:
-                    voronoi_cells[closest_cycle] += 1
-
-    #msg = ''
-    #for player in list_players:
-    #    msg += str(player) + ': ' + str(voronoi_cells[player]) + ' '
-    #print(str(msg), flush=True)
-    return voronoi_cells
 
 def compute_voronoi_bfs(area, last_positions, list_players):
     '''
@@ -626,7 +453,7 @@ class Chamber:
     def __init__(self, p_entrance, p_depth, p_parent = None):
         self.space = 0
         self.entrance = p_entrance
-        self.positions = deque() #help in case of merge
+        #self.positions = deque() #help in case of merge
         self.parent = p_parent
         self.depth = p_depth
         self.is_leaf = True
@@ -687,7 +514,6 @@ def compute_tree_of_chambers(area, voronoi_area, articulation_points, current_po
     front_nodes = deque()
 
     available_directions = [[0, -1], [0, 1], [-1, 0], [1, 0]]
-    nb_spaces = 0
 
     #Step 0: Build first chamber and entrance is the step before the current position
     #note that chamber_area[previous_position] == None
@@ -696,7 +522,6 @@ def compute_tree_of_chambers(area, voronoi_area, articulation_points, current_po
     origin_chamber = new_chamber
 
     chamber_area[current_position] = new_chamber
-    new_chamber.positions.append(current_position)
     front_nodes.append(current_position)
 
     depth = 1
@@ -713,7 +538,6 @@ def compute_tree_of_chambers(area, voronoi_area, articulation_points, current_po
 
             if 0 <= new_x <= Configuration.MAX_X_GRID and 0 <= new_y <= Configuration.MAX_Y_GRID and not area[new_x, new_y]:
                 #Step 1-1: if neighbor not in voronoi area of the player => ignore it !
-                #if numpy.sign(voronoi_area[cur]) > 0:
                 if voronoi_area[cur] == voronoi_index_player:
                     is_bottle_neck = (new_x, new_y) in articulation_points
 
@@ -724,7 +548,6 @@ def compute_tree_of_chambers(area, voronoi_area, articulation_points, current_po
                             #add neighbor to the front queue
                         chamber_area[(new_x, new_y)] = current_chamber
                         current_chamber.space += 1
-                        current_chamber.positions.append((new_x, new_y))
                         front_nodes.append((new_x, new_y))
                     elif chamber_area[(new_x, new_y)] == 0 and is_bottle_neck:
                         #Step 1-3: if neighbor without chamber and is an articulation point:
@@ -734,12 +557,12 @@ def compute_tree_of_chambers(area, voronoi_area, articulation_points, current_po
                         depth += 1
                         new_chamber = Chamber((new_x, new_y), depth, current_chamber)
                         new_chamber.space = 0
-                        new_chamber.positions.append((new_x, new_y))
                         list_chambers.append(new_chamber)
 
                         chamber_area[(new_x, new_y)] = new_chamber
                         current_chamber.is_leaf = False
                         front_nodes.append((new_x, new_y))
+                    '''
                     else:
                         if chamber_area[(new_x, new_y)] == current_chamber:
                             # Step 1-4: if neighbor associated with the current chamber (or entrance of the current chamber) => ignore it !
@@ -750,8 +573,8 @@ def compute_tree_of_chambers(area, voronoi_area, articulation_points, current_po
                                 # identify the lowest common parent chamber
                                 # merge the two chambers into the common parent
                             # do NOT add the neighbor to the front queue !
-
                             pass
+                    '''
 
     #Step 2: Compute spaces between the different leaf chambers and root chamber
     #Step 3: Select best solution (more space => better solution)
@@ -784,9 +607,6 @@ class MCTSBot():
         self.turn = 0
 
     def compute_direction(self, input):
-        self.list_players.clear()
-        self.list_players_without_me.clear()
-
         splitted = input.split('\n')
         nb_players, my_index = [int(i) for i in splitted[0].split()]
 
@@ -825,6 +645,37 @@ class MCTSBot():
                     self.list_players.remove(i)
                     self.list_players_without_me.remove(i)
 
-        direction = compute_MCTS(self.area, self.cur_cycles, self.list_players, my_index)
+        distance = compute_path(self.area, self.wall_cycles[my_index][-1], self.wall_cycles[1 - my_index][-1])
+
+        if distance is None:
+            #Play to stick the walls
+            direction = 'NORTH'
+            best_spaces = 0
+
+            available_directions = [[0, -1], [0, 1], [-1, 0], [1, 0]]
+            for off_x, off_y in available_directions:
+                new_x = self.cur_cycles[my_index][0] + off_x
+                new_y = self.cur_cycles[my_index][1] + off_y
+
+                if 0 <= new_x <= Configuration.MAX_X_GRID and 0 <= new_y <= Configuration.MAX_Y_GRID and not self.area[new_x, new_y]:
+                    voronoi_area, voronoi_spaces = compute_voronoi_area(self.area, self.cur_cycles, [0, 1])
+                    my_articulation_points = detect_articulation_points(self.area, self.cur_cycles[my_index])
+                    my_spaces = compute_tree_of_chambers(self.area, voronoi_area, my_articulation_points, self.wall_cycles[1 - my_index][-1], self.wall_cycles[1 - my_index][-2],my_index+1)
+
+                    if my_spaces > best_spaces:
+                        best_spaces = my_spaces
+
+                        if new_x - self.cur_cycles[my_index][0] > 0:
+                            direction = 'RIGHT'
+                        elif new_x - self.cur_cycles[my_index][0] < 0:
+                            direction = 'LEFT'
+                        elif new_y - self.cur_cycles[my_index][1] > 0:
+                            direction = 'DOWN'
+                        elif new_y - self.cur_cycles[my_index][1] < 0:
+                            direction = 'UP'
+        else:
+            direction = compute_MCTS(self.area, self.cur_cycles, self.wall_cycles, self.list_players, my_index)
+
         print(direction, flush=True)
+        self.turn += 1
         return direction
