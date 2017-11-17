@@ -1,7 +1,10 @@
 import unittest
 import Configuration
+import sys
+from time import clock
 from numpy import ones, zeros, copy, int32, sign
-from TreeOfChambers import compute_tree_of_chambers, detect_articulation_points
+from TreeOfChambers import compute_tree_of_chambers, detect_articulation_points, detect_articulation_points_array, detect_articulation_points_array_without_nodes, detect_articulation_points_array_without_nodes_with_array, \
+    compute_voronoi_area_without_numpy, compute_voronoi_area, compute_path, compute_path_array
 
 class TestTreeOfChambers(unittest.TestCase):
 
@@ -160,6 +163,7 @@ class TestTreeOfChambers(unittest.TestCase):
         self.assertEqual(nb_spaces, 48)
 
     def test_compute_tree_of_complex_choice_chamber(self):
+
         area = zeros((Configuration.MAX_X_GRID + 1, Configuration.MAX_Y_GRID + 1), dtype=bool)
         for i in range(0, 11): area[i, 5] = 1
         for i in range(12, 23): area[i, 5] = 1
@@ -172,7 +176,122 @@ class TestTreeOfChambers(unittest.TestCase):
         voronoi = ones((Configuration.MAX_X_GRID + 1, Configuration.MAX_Y_GRID + 1), dtype=int32)
         current_pos = (11, 0)
 
-        articulations = detect_articulation_points(area, current_pos)
+        cumulated = 0
+        start = clock()
+        for k in range(10000):
+            articulations = detect_articulation_points(area, current_pos)
+        cumulated += (clock() - start)
+
+        print('Average AP matrix = ' + str((cumulated/10000.0) * 1000.0), file=sys.stderr, flush=True)
+
         nb_spaces = compute_tree_of_chambers(area, voronoi, articulations, current_pos, (-1, -1))
 
         self.assertEqual(nb_spaces, 45)
+
+        area_array = zeros(600, dtype=bool)
+        for i in range(0, 11): area_array[(5*30)+i] = 1
+        for i in range(12, 23): area_array[(5*30)+i] = 1
+        for i in range(0, 13): area_array[(9*30)+i] = 1
+        for i in range(1, 6): area_array[(i*30)+4] = 1
+        for i in range(1, 6): area_array[(i*30)+10] = 1
+        for i in range(1, 12): area_array[(i*30)+12] = 1
+        for i in range(0, 6): area_array[(i*30)+22] = 1
+
+        r_index = current_pos[1] * 30 + current_pos[0]
+
+        cumulated = 0
+        start = clock()
+        for k in range(10000):
+            articulations = detect_articulation_points_array(area_array, current_pos, r_index)
+        cumulated += (clock() - start)
+        print('Average AP array = ' + str((cumulated / 10000.0) * 1000.0), file=sys.stderr, flush=True)
+
+        start = clock()
+        for k in range(10000):
+            articulations = detect_articulation_points_array_without_nodes(area_array, current_pos, r_index)
+        cumulated = (clock() - start)
+
+        print('Average AP array without nodes = ' + str((cumulated / 10000.0) * 1000.0), file=sys.stderr, flush=True)
+
+        start = clock()
+        for k in range(10000):
+            articulations = detect_articulation_points_array_without_nodes_with_array(area_array, current_pos, r_index)
+        cumulated = (clock() - start)
+
+        print('Average AP array without nodes without numpy = ' + str((cumulated / 10000.0) * 1000.0), file=sys.stderr, flush=True)
+
+        self.assertEqual(nb_spaces, 45)
+
+    def test_performance_voronoi(self):
+
+        area = zeros((Configuration.MAX_X_GRID + 1, Configuration.MAX_Y_GRID + 1), dtype=bool)
+        for i in range(0, 11): area[i, 5] = 1
+        for i in range(12, 23): area[i, 5] = 1
+        for i in range(0, 13): area[i, 9] = 1
+        for i in range(1, 6): area[4, i] = 1
+        for i in range(1, 6): area[10, i] = 1
+        for i in range(1, 12): area[12, i] = 1
+        for i in range(0, 6): area[22, i] = 1
+
+        start = clock()
+        for k in range(10000):
+            voronoi_area, voronoi_count = compute_voronoi_area(area, [(11, 0), (23,6)], [0,1])
+        cumulated = (clock() - start)
+        print('Average Voronoi numpy = ' + str((cumulated / 10000.0) * 1000.0), file=sys.stderr, flush=True)
+
+        self.assertEqual(voronoi_count[0], 135)
+        self.assertEqual(voronoi_count[1], 408)
+
+
+        area_array = [0] * 600
+        for i in range(0, 11): area_array[(5 * 30) + i] = 1
+        for i in range(12, 23): area_array[(5 * 30) + i] = 1
+        for i in range(0, 13): area_array[(9 * 30) + i] = 1
+        for i in range(1, 6): area_array[(i * 30) + 4] = 1
+        for i in range(1, 6): area_array[(i * 30) + 10] = 1
+        for i in range(1, 12): area_array[(i * 30) + 12] = 1
+        for i in range(0, 6): area_array[(i * 30) + 22] = 1
+
+        start = clock()
+        for k in range(10000):
+            voronoi_area, voronoi_count = compute_voronoi_area_without_numpy(area_array, [(11, 0), (23,6)], [0,1])
+        cumulated = (clock() - start)
+        print('Average Voronoi array = ' + str((cumulated / 10000.0) * 1000.0), file=sys.stderr, flush=True)
+
+        self.assertEqual(voronoi_count[0], 135)
+        self.assertEqual(voronoi_count[1], 408)
+
+    def test_performance_path(self):
+        area = zeros((Configuration.MAX_X_GRID + 1, Configuration.MAX_Y_GRID + 1), dtype=bool)
+        for i in range(0, 11): area[i, 5] = 1
+        for i in range(12, 23): area[i, 5] = 1
+        for i in range(0, 13): area[i, 9] = 1
+        for i in range(1, 6): area[4, i] = 1
+        for i in range(1, 6): area[10, i] = 1
+        for i in range(1, 12): area[12, i] = 1
+        for i in range(0, 6): area[22, i] = 1
+
+        start = clock()
+        for k in range(10000):
+            distance = compute_path(area, (23, 0), (0, 18))
+        cumulated = (clock() - start)
+        print('Average A* numpy = ' + str((cumulated / 10000.0) * 1000.0), file=sys.stderr, flush=True)
+
+        self.assertEqual(distance, 41)
+
+        area_array = [0] * 600
+        for i in range(0, 11): area_array[(5 * 30) + i] = 1
+        for i in range(12, 23): area_array[(5 * 30) + i] = 1
+        for i in range(0, 13): area_array[(9 * 30) + i] = 1
+        for i in range(1, 6): area_array[(i * 30) + 4] = 1
+        for i in range(1, 6): area_array[(i * 30) + 10] = 1
+        for i in range(1, 12): area_array[(i * 30) + 12] = 1
+        for i in range(0, 6): area_array[(i * 30) + 22] = 1
+
+        start = clock()
+        for k in range(10000):
+            distance = compute_path_array(area_array, (23, 0), 23, (0,18), 540)
+        cumulated = (clock() - start)
+        print('Average A* array = ' + str((cumulated / 10000.0) * 1000.0), file=sys.stderr, flush=True)
+
+        self.assertEqual(distance, 41)

@@ -1,7 +1,10 @@
 import Configuration
 import numpy
-from numpy import ones, zeros, copy, int32
+import sys
+from numpy import ones, zeros, copy, int32, array
 from collections import deque
+from time import clock
+from heapq import heappop, heappush
 
 class Chamber:
     def __init__(self, p_entrance, p_depth, p_parent = None):
@@ -55,57 +58,149 @@ def detect_articulation_points(area, root):
                     visited_nodes[vertex].low = min(visited_nodes[vertex].low, visited_nodes[new_x, new_y].depth)
 
     f(root,0)
+
     return articulations
 
+def detect_articulation_points_array(area, root, r_index):
     '''
-    https: // en.wikipedia.org / wiki / Biconnected_component
-    GetArticulationPoints(i, d)
-        visited[i] = true
-        depth[i] = d
-        low[i] = d
-        childCount = 0
-        isArticulation = false
-        for each ni in adj[i]
-            if not visited[ni]
-                parent[ni] = i
-                GetArticulationPoints(ni, d + 1)
-                childCount = childCount + 1
-                if low[ni] >= depth[i]
-                    isArticulation = true
-                low[i] = Min(low[i], low[ni])
-            else if ni <> parent[i]
-                low[i] = Min(low[i], depth[ni])
-
-
-        if (parent[i] <> null and isArticulation) or (parent[i] == null and childCount > 1)
-            Output
-            i as articulation
-            point
+    Find the points that if were filled would separate the board.
+    DFS approach
+    https://en.wikipedia.org/wiki/Biconnected_component
+    :return: list of adjacent points
     '''
 
+    class Node:
+        def __init__(self):
+            self.depth = None
+            self.low = None
+
+    visited_nodes = zeros(600, dtype=object)
+
+    parents = {}
+    available_directions = [[0, -1], [0, 1], [-1, 0], [1, 0]]
+    articulations = []
+
+    def f(vertex, v_index, p_depth):
+        depth = p_depth
+
+        node = Node()
+        node.depth = depth
+        node.low = depth
+        visited_nodes[v_index] = node
+
+        for off_x, off_y in available_directions:
+            new_x = vertex[0] + off_x
+            new_y = vertex[1] + off_y
+
+            new_index = new_y * 30 + new_x
+
+            if 0 <= new_x <= Configuration.MAX_X_GRID and 0 <= new_y <= Configuration.MAX_Y_GRID and not area[new_index]:
+                new_node = visited_nodes[new_index]
+                if new_node == 0:
+                    parents[new_index] = v_index
+                    f((new_x, new_y), new_index, p_depth + 1)
+                    new_node = visited_nodes[new_index]
+
+                    if v_index != r_index and new_node.low >= node.depth and v_index not in articulations:
+                        articulations.append(v_index)
+
+                    node.low = min(node.low, new_node.low)
+                elif v_index in parents and parents[v_index] != new_index:
+                    node.low = min(node.low, new_node.depth)
+
+    f(root,r_index,0)
+
+    return articulations
+
+def detect_articulation_points_array_without_nodes(area, root, r_index):
     '''
-    Une implémentation du pseudo code de Wikipedia
-    Je pense que c sert de depth dans cette implémentation
-    https: // github.com / coreyabshire / tron / blob / master / tronutils.py
-    V = set(); A = Adjacent(board, is_floor)
-    L = {}; N = {}; c = [0]; P = {}; X = set()
-    def f(v):
-        V.add(v)
-        c[0] += 1
-        L[v] = N[v] = c[0]
-        for w in A[v]:
-            if w not in V:
-                P[w] = v
-                f(w)
-                if v != root and L[w] >= N[v]:
-                    X.add(v)
-                L[v] = min(L[v], L[w])
-            else:
-                if v in P and P[v] != w:
-                    L[v] = min(L[v], N[w])
-    f(root)
-    return X
+    Find the points that if were filled would separate the board.
+    DFS approach
+    https://en.wikipedia.org/wiki/Biconnected_component
+    :return: list of adjacent points
     '''
+
+    visited_nodes = zeros(600, dtype=bool)
+    a_low = zeros(600, dtype=int32)
+    a_depth = zeros(600, dtype=int32)
+
+    parents = {}
+    available_directions = [[0, -1], [0, 1], [-1, 0], [1, 0]]
+    articulations = []
+
+    def f(vertex, v_index, p_depth):
+        depth = p_depth
+
+        a_low[v_index] = p_depth
+        a_depth[v_index] = p_depth
+        visited_nodes[v_index] = True
+
+        for off_x, off_y in available_directions:
+            new_x = vertex[0] + off_x
+            new_y = vertex[1] + off_y
+
+            new_index = new_y * 30 + new_x
+
+            if 0 <= new_x <= Configuration.MAX_X_GRID and 0 <= new_y <= Configuration.MAX_Y_GRID and not area[new_index]:
+                if not visited_nodes[new_index]:
+                    parents[new_index] = v_index
+                    f((new_x, new_y), new_index, p_depth + 1)
+
+                    if v_index != r_index and a_low[new_index] >= a_depth[v_index] and v_index not in articulations:
+                        articulations.append(v_index)
+
+                    a_low[v_index] = min(a_low[v_index], a_low[new_index])
+                elif v_index in parents and parents[v_index] != new_index:
+                    a_low[v_index] = min(a_low[v_index], a_depth[new_index])
+
+    f(root,r_index,0)
+
+    return articulations
+
+def detect_articulation_points_array_without_nodes_with_array(area, root, r_index):
+    '''
+    Find the points that if were filled would separate the board.
+    DFS approach
+    https://en.wikipedia.org/wiki/Biconnected_component
+    :return: list of adjacent points
+    '''
+
+    visited_nodes = [False] * 600
+    a_low = [0] * 600
+    a_depth = [0] * 600
+
+    parents = {}
+    available_directions = [[0, -1], [0, 1], [-1, 0], [1, 0]]
+    articulations = []
+
+    def f(vertex, v_index, p_depth):
+        depth = p_depth
+
+        a_low[v_index] = p_depth
+        a_depth[v_index] = p_depth
+        visited_nodes[v_index] = True
+
+        for off_x, off_y in available_directions:
+            new_x = vertex[0] + off_x
+            new_y = vertex[1] + off_y
+
+            new_index = new_y * 30 + new_x
+
+            if 0 <= new_x <= Configuration.MAX_X_GRID and 0 <= new_y <= Configuration.MAX_Y_GRID and not area[new_index]:
+                if not visited_nodes[new_index]:
+                    parents[new_index] = v_index
+                    f((new_x, new_y), new_index, p_depth + 1)
+
+                    if v_index != r_index and a_low[new_index] >= a_depth[v_index] and v_index not in articulations:
+                        articulations.append(v_index)
+
+                    a_low[v_index] = min(a_low[v_index], a_low[new_index])
+                elif v_index in parents and parents[v_index] != new_index:
+                    a_low[v_index] = min(a_low[v_index], a_depth[new_index])
+
+    f(root,r_index,0)
+
+    return articulations
 
 def compute_tree_of_chambers(area, voronoi_area, articulation_points, current_position, previous_position):
     '''
@@ -170,49 +265,6 @@ def compute_tree_of_chambers(area, voronoi_area, articulation_points, current_po
                         chamber_area[(new_x, new_y)] = new_chamber
                         current_chamber.is_leaf = False
                         front_nodes.append((new_x, new_y))
-                    else:
-                        if chamber_area[(new_x, new_y)] == current_chamber:
-                            # Step 1-4: if neighbor associated with the current chamber (or entrance of the current chamber) => ignore it !
-                            pass
-                        elif chamber_area[(new_x, new_y)] != origin_chamber and current_chamber != origin_chamber and chamber_area[(new_x, new_y)] != current_chamber and chamber_area[(new_x, new_y)] != 0 and current_chamber.entrance != (new_x, new_y):
-                            #Step 1-5: if neighbor associated with a chamber different from the current chamber and not the entrance of the current chamber
-                            # merge current chamber and neighbor chamber:
-                                # identify the lowest common parent chamber
-                                # merge the two chambers into the common parent
-                            # do NOT add the neighbor to the front queue !
-
-                            #if current_chamber != origin_chamber: parent_1 = current_chamber.parent
-                            #else: parent_1 = current_chamber
-                            #if chamber_area[(new_x, new_y)] != origin_chamber: parent_2 = chamber_area[(new_x, new_y)].parent
-                            #else: parent_2 = chamber_area[(new_x, new_y)]
-
-                            '''
-                            if current_chamber.depth > chamber_area[(new_x, new_y)].depth:
-                                parent_1 = current_chamber.parent
-                                parent_2 = chamber_area[(new_x, new_y)]
-                            else:
-                                parent_1 = current_chamber
-                                parent_2 = chamber_area[(new_x, new_y)].parent
-
-                            while parent_1 != parent_2:
-                                if parent_1 != origin_chamber: parent_1 = parent_1.parent
-                                if parent_2 != origin_chamber: parent_2 = parent_2.parent
-
-                            if parent_1 != current_chamber:
-                                parent_1.space += current_chamber.space
-                                if current_chamber != origin_chamber: list_chambers.remove(current_chamber)
-                                for pos in current_chamber.positions:
-                                    chamber_area[pos] = parent_1
-                                    parent_1.positions.append(pos)
-
-                            if parent_1 != chamber_area[(new_x, new_y)]:
-                                parent_1.space += chamber_area[(new_x, new_y)].space
-                                if chamber_area[(new_x, new_y)] != origin_chamber: list_chambers.remove(chamber_area[(new_x, new_y)])
-                                for pos in chamber_area[(new_x, new_y)].positions:
-                                    chamber_area[pos] = parent_1
-                                    parent_1.positions.append(pos)
-                            '''
-                            pass
 
     #Step 2: Compute spaces between the different leaf chambers and root chamber
     #Step 3: Select best solution (more space => better solution)
@@ -234,3 +286,171 @@ def compute_tree_of_chambers(area, voronoi_area, articulation_points, current_po
     best_space += origin_chamber.space
 
     return best_space
+
+
+def compute_voronoi_area(area, last_positions, list_players):
+
+    voronoi_area = zeros((Configuration.MAX_X_GRID+1, Configuration.MAX_Y_GRID+1),dtype=int32)
+    voronoi_area[last_positions[0]] = list_players[0] + 1
+    voronoi_area[last_positions[1]] = list_players[1] + 1
+
+    voronoi = {}
+    for i in list_players:
+        voronoi[i] = 1
+    voronoi[Configuration.NEUTRAL_CODE] = 0
+
+    front_nodes = deque()
+    front_nodes.append(last_positions[0])
+    front_nodes.append(last_positions[1])
+
+    available_directions = [[0, -1], [0, 1], [-1, 0], [1, 0]]
+    while len(front_nodes) > 0:
+        cur = front_nodes.popleft()
+        x, y = cur[0], cur[1]
+
+        neighbor_value = voronoi_area[x, y]
+
+        if neighbor_value != Configuration.NEUTRAL_CODE:
+            for off_x, off_y in available_directions:
+                new_x = x + off_x
+                new_y = y + off_y
+
+                if 0 <= new_x <= Configuration.MAX_X_GRID and 0 <= new_y <= Configuration.MAX_Y_GRID and not area[new_x, new_y]:
+                    next_value = voronoi_area[new_x, new_y]
+
+                    if next_value == 0:
+                        voronoi_area[new_x, new_y] = neighbor_value
+                        voronoi[neighbor_value-1] += 1
+                        front_nodes.append((new_x, new_y))
+                    elif next_value != 0 and next_value != neighbor_value:
+                        voronoi_area[new_x, new_y] = Configuration.NEUTRAL_CODE
+                        voronoi[Configuration.NEUTRAL_CODE] += 1
+
+    return voronoi_area, voronoi
+
+def compute_voronoi_area_without_numpy(area, last_positions, list_players):
+
+    voronoi_area = [0] * 600
+    voronoi_area[last_positions[0][1]*30+last_positions[0][0]] = list_players[0] + 1
+    voronoi_area[last_positions[1][1]*30+last_positions[1][0]] = list_players[1] + 1
+
+    voronoi = {}
+    for i in list_players:
+        voronoi[i] = 1
+    voronoi[Configuration.NEUTRAL_CODE] = 0
+
+    front_nodes = deque()
+    front_nodes.append(last_positions[0])
+    front_nodes.append(last_positions[1])
+
+    available_directions = [[0, -1], [0, 1], [-1, 0], [1, 0]]
+    while len(front_nodes) > 0:
+        cur = front_nodes.popleft()
+        x, y = cur[0], cur[1]
+        front_index = y * 30 +x
+
+        neighbor_value = voronoi_area[front_index]
+
+        if neighbor_value != Configuration.NEUTRAL_CODE:
+            for off_x, off_y in available_directions:
+                new_x = x + off_x
+                new_y = y + off_y
+
+                new_index = new_y * 30 + new_x
+
+                if 0 <= new_x <= Configuration.MAX_X_GRID and 0 <= new_y <= Configuration.MAX_Y_GRID and not area[new_index]:
+                    next_value = voronoi_area[new_index]
+
+                    if next_value == 0:
+                        voronoi_area[new_index] = neighbor_value
+                        voronoi[neighbor_value-1] += 1
+                        front_nodes.append((new_x, new_y))
+                    elif next_value != 0 and next_value != neighbor_value:
+                        voronoi_area[new_index] = Configuration.NEUTRAL_CODE
+                        voronoi[Configuration.NEUTRAL_CODE] += 1
+
+    return voronoi_area, voronoi
+
+def heuristic(cell, goal):
+    '''
+    Heuristic for A*, here manhattan distance
+    '''
+    return abs(cell[0] - goal[0]) + abs(cell[1] - goal[1])
+
+
+def compute_path(area, root, goal):
+    '''
+    implementation of A*
+    '''
+
+    pr_queue = []
+    heappush(pr_queue, (0 + heuristic(root, goal), 0, root))
+
+    start = clock()
+    visited_area =  copy(area)
+    print('copy time Matrix: ' + str((clock() - start) * 1000), file=sys.stderr, flush=True)
+
+    visited_area[root] = 0
+    available_directions = [[0, -1], [0, 1], [-1, 0], [1, 0]]
+
+    while len(pr_queue) > 0:
+        _, cost, current = heappop(pr_queue)  # return the priority in the heap, cost, path and current element
+
+        if current == goal: #Maybe change here to return the element and compute the path after ...
+            return cost
+
+        if visited_area[current] == 0:
+            visited_area[current] = Configuration.WALL_CODE
+
+            for off_x, off_y in available_directions:
+                new_x = current[0] + off_x
+                new_y = current[1] + off_y
+
+                if 0 <= new_x < 30 and 0 <= new_y < 20:
+                    neighbor = (new_x, new_y)
+                    heappush(pr_queue, (cost + heuristic(neighbor, goal), cost + 1, neighbor))
+    return None
+
+def heuristic_array(x0,y0,x1,y1):
+    '''
+    Heuristic for A*, here manhattan distance
+    '''
+    return abs(x0 - x1) + abs(y0 - y1)
+
+
+def compute_path_array(area, root, r_index, goal, g_index):
+    '''
+    implementation of A*
+    '''
+
+    pr_queue = []
+    heappush(pr_queue, (0 + heuristic(root, goal), 0, root))
+
+    start = clock()
+    visited_area = area[:]
+    print('copy time Array: ' + str((clock()-start)*1000), file=sys.stderr, flush=True)
+
+    visited_area[r_index] = 0
+    available_directions = [[0, -1], [0, 1], [-1, 0], [1, 0]]
+
+    x_goal = goal[0]
+    y_goal = goal[1]
+
+    while len(pr_queue) > 0:
+        _, cost, current = heappop(pr_queue)  # return the priority in the heap, cost, path and current element
+        cur_index = current[1] * 30 + current[0]
+
+        if cur_index == g_index: #Maybe change here to return the element and compute the path after ...
+            return cost
+
+        if visited_area[cur_index] == 0:
+            visited_area[cur_index] = Configuration.WALL_CODE
+
+            for off_x, off_y in available_directions:
+                new_x = current[0] + off_x
+                new_y = current[1] + off_y
+
+                if 0 <= new_x < 30 and 0 <= new_y < 20:
+                    neighbor = (new_x, new_y)
+                    heappush(pr_queue, (cost + heuristic_array(new_x, new_y, x_goal, y_goal), cost + 1, neighbor))
+    return None
