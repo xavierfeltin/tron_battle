@@ -1,7 +1,7 @@
 import Configuration
 from random import randint
 from numpy import ones, zeros
-from time import time
+from time import clock
 
 class GameEngine:
     def __init__(self, nb_players):
@@ -46,9 +46,9 @@ class GameEngine:
                         input += str(self.initial_cycles_positions[j][0]) + ' ' + str(self.initial_cycles_positions[j][1]) + ' '
                         input += str(self.cycles_positions[j][0]) + ' ' + str(self.cycles_positions[j][1]) + '\n'
 
-                start = time()
+                start = clock()
                 direction = self.players[i].compute_direction(input)
-                print(str(i) + ': ' + str(round((time() - start)*1000,2)) + 'ms', flush=True)
+                print(str(i) + ': ' + str(round((clock() - start)*1000,2)) + 'ms', flush=True)
 
                 if direction == 'LEFT': new_x -= 1
                 elif direction == 'RIGHT': new_x += 1

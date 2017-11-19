@@ -4,7 +4,8 @@ from GameFrame import GameFrame
 from GameEngine import GameEngine
 from RandomBot import RandomBot
 from ExplicitBot import ExplicitBot
-from MCTSBot import MCTSBot
+#from MCTSBot import MCTSBot
+from MCTSBot_optimized import MCTSBot
 from time import sleep
 
 NB_PLAYERS = 2
