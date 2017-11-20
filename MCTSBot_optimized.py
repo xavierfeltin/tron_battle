@@ -171,7 +171,7 @@ class Node:
         # Check if it is an early end game
         if len(list_players) == 2:
             start = clock()
-            voronoi_area, voronoi_spaces = compute_voronoi(area, current_positions, [0,1],manhattan_cache, index_cache)
+            voronoi_area, voronoi_spaces = compute_voronoi(area, current_positions, [0,1], index_cache)
             voronoi_time = (clock() - start) * 1000
             msg += 'voronoi: ' + str(round(voronoi_time,2)) + 'ms'
 
@@ -280,7 +280,7 @@ class Node:
 
         else:
             # Use Voronoi for now
-            voronoi_area, voronoi_spaces = compute_voronoi(area, current_positions, list_players, manhattan_cache, index_cache)
+            voronoi_area, voronoi_spaces = compute_voronoi(area, current_positions, list_players, index_cache)
 
             space_max = 0
             winner = None
@@ -353,34 +353,49 @@ def compute_MCTS(area, cur_cycles, previous_moves, list_players, my_index, manha
     else:
         return ''
 
-def compute_voronoi(area, last_positions, list_players, manhattan_cache, index_cache):
+def compute_voronoi(area, last_positions, list_players, index_cache):
+
+    to_visit_area = area[:]
+    to_visit_area[index_cache[last_positions[0][0]][last_positions[0][1]]] = True
+    to_visit_area[index_cache[last_positions[1][0]][last_positions[1][1]]] = True
 
     voronoi_area = [-1] * 600
+    voronoi_area[index_cache[last_positions[0][0]][last_positions[0][1]]] = list_players[0]
+    voronoi_area[index_cache[last_positions[1][0]][last_positions[1][1]]] = list_players[1]
+
     neutral_index = len(list_players)
-    voronoi = [0] * (neutral_index + 1)
+    voronoi = [1] * (neutral_index + 1)
+    voronoi[neutral_index] = 0
 
-    for x in range(30):
-        for y in range(20):
-            if area[index_cache[x][y]]:
-                min_distance = 100
-                min_player = -1
-                nb_players = 0
+    front_nodes = deque()
+    front_nodes.append(last_positions[0])
+    front_nodes.append(last_positions[1])
 
-                for player in list_players:
-                    xp, yp = last_positions[player][0], last_positions[player][1]
-                    distance = manhattan_cache[x][y][xp][yp]
+    available_directions = [[0, -1], [0, 1], [-1, 0], [1, 0]]
+    while front_nodes:
+        cur = front_nodes.popleft()
+        x, y = cur[0], cur[1]
+        front_index = index_cache[x][y]
 
-                    if distance < min_distance:
-                        min_distance = distance
-                        min_player = player
-                        nb_players = 1
-                    elif distance == min_distance:
-                        nb_players += 1
+        neighbor_value = voronoi_area[front_index]
 
-                if nb_players == 1:
-                    voronoi_area[index_cache[x][y]] = min_player
-                    voronoi[min_player] += 1
-                else:
+        # if neighbor_value != Configuration.NEUTRAL_CODE:
+        for off_x, off_y in available_directions:
+            new_x = x + off_x
+            new_y = y + off_y
+
+            if 0 <= new_x < 30 and 0 <= new_y < 20 and to_visit_area[index_cache[new_x][new_y]]:
+                new_index = index_cache[new_x][new_y]
+
+                to_visit_area[new_index] = False
+                next_value = voronoi_area[new_index]
+
+                if next_value == -1:
+                    voronoi_area[new_index] = neighbor_value
+                    voronoi[neighbor_value] += 1
+                    front_nodes.append((new_x, new_y))
+                elif next_value != -1 and next_value != neighbor_value:
+                    voronoi_area[new_index] = neutral_index
                     voronoi[neutral_index] += 1
 
     return voronoi_area, voronoi
@@ -664,7 +679,7 @@ class MCTSBot():
                 new_y = self.current_move[my_index][1] + off_y
 
                 if 0 <= new_x < 30 and 0 <= new_y < 20 and self.area[self.index_cache[new_x][new_y]]:
-                    voronoi_area, voronoi_spaces = compute_voronoi(self.area, self.current_move, [0, 1], self.manhattan_cache, self.index_cache)
+                    voronoi_area, voronoi_spaces = compute_voronoi(self.area, self.current_move, [0, 1], self.index_cache)
 
                     my_articulation_points = detect_articulation_points(self.area, self.current_move[my_index], self.index_cache[self.current_move[my_index][0]][self.current_move[my_index][1]], self.index_cache)
 

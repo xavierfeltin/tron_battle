@@ -5,7 +5,7 @@ from time import clock
 from numpy import ones, zeros, copy, int32, sign
 from TreeOfChambers import compute_tree_of_chambers, detect_articulation_points, detect_articulation_points_array, detect_articulation_points_array_without_nodes, detect_articulation_points_array_without_nodes_with_array, \
     compute_voronoi_area_without_numpy, compute_voronoi_area, compute_path, compute_path_array_heuristic, compute_path_array_cache, generate_manhattan_cache, generate_cache_index, \
-    compute_voronoi_area_with_manhattan, compute_tree_of_chambers_optimized
+    compute_voronoi_with_a_star, compute_tree_of_chambers_optimized, compute_voronoi_area_without_numpy2
 
 class TestTreeOfChambers(unittest.TestCase):
 
@@ -225,7 +225,7 @@ class TestTreeOfChambers(unittest.TestCase):
 
         index_cache = generate_cache_index()
         start = clock()
-        for k in range(10000):
+        for k in range(1):
             articulations = detect_articulation_points_array_without_nodes_with_array(area_array, current_pos, r_index, index_cache)
         cumulated = (clock() - start)
 
@@ -249,10 +249,6 @@ class TestTreeOfChambers(unittest.TestCase):
             voronoi_area, voronoi_count = compute_voronoi_area(area, [(11, 0), (23,6)], [0,1])
         cumulated = (clock() - start)
         print('Average Voronoi numpy = ' + str((cumulated / 10000.0) * 1000.0), file=sys.stderr, flush=True)
-        print('Average Voronoi numpy = ' + str((cumulated / 10000.0) * 1000.0), file=sys.stderr, flush=True)
-
-        self.assertEqual(voronoi_count[0], 135)
-        self.assertEqual(voronoi_count[1], 408)
 
         area_array = [True] * 600
         for i in range(0, 11): area_array[(5 * 30) + i] = False
@@ -270,18 +266,28 @@ class TestTreeOfChambers(unittest.TestCase):
         cumulated = (clock() - start)
         print('Average Voronoi array = ' + str((cumulated / 10000.0) * 1000.0), file=sys.stderr, flush=True)
 
+        '''
         index_cache = generate_cache_index()
         manhattan_cache = generate_manhattan_cache()
         start = clock()
         for k in range(10000):
-            voronoi_area, voronoi_count = compute_voronoi_area_with_manhattan(area_array, [(11, 0), (23, 6)], [0, 1], manhattan_cache, index_cache)
+            voronoi_area, voronoi_count = compute_voronoi_area_without_numpy2(area_array, [(11, 0), (23,6)], [0,1],index_cache)
         cumulated = (clock() - start)
-        print('Average Voronoi manhattan = ' + str((cumulated / 10000.0) * 1000.0), file=sys.stderr, flush=True)
+        print('Average Voronoi array 2 = ' + str((cumulated / 10000.0) * 1000.0), file=sys.stderr, flush=True)
+        '''
 
+        '''
+        start = clock()
+        for k in range(10000):
+            voronoi_area, voronoi_count = compute_voronoi_with_a_star(area_array, [(11, 0), (23, 6)], [0, 1],
+                                                                              manhattan_cache, index_cache)
+        cumulated = (clock() - start)
+        print('Average Voronoi A* = ' + str((cumulated / 10000) * 1000.0), file=sys.stderr, flush=True)
+        '''
 
-        self.assertEqual(voronoi_count[0], 258)
-        self.assertEqual(voronoi_count[1], 268)
-        self.assertEqual(voronoi_count[2], 19)
+        self.assertEqual(voronoi_count[0], 135)
+        self.assertEqual(voronoi_count[1], 408)
+        self.assertEqual(voronoi_count[2], 0)
 
     def test_performance_path(self):
         area = zeros((Configuration.MAX_X_GRID + 1, Configuration.MAX_Y_GRID + 1), dtype=bool)
@@ -310,7 +316,7 @@ class TestTreeOfChambers(unittest.TestCase):
         for i in range(0, 6): area_array[(i * 30) + 22] = 1
 
         start = clock()
-        for k in range(10000):
+        for k in range(1):
             distance = compute_path_array_heuristic(area_array, (23, 0), 23, (0,18), 540)
         cumulated = (clock() - start)
         print('Average A* array Heuristic = ' + str((cumulated / 10000.0) * 1000.0), file=sys.stderr, flush=True)

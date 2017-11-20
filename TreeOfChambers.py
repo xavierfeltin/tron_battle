@@ -442,24 +442,67 @@ def compute_voronoi_area_without_numpy(area, last_positions, list_players, index
 
         neighbor_value = voronoi_area[front_index]
 
-        if neighbor_value != Configuration.NEUTRAL_CODE:
-            for off_x, off_y in available_directions:
-                new_x = x + off_x
-                new_y = y + off_y
+        #if neighbor_value != Configuration.NEUTRAL_CODE:
+        for off_x, off_y in available_directions:
+            new_x = x + off_x
+            new_y = y + off_y
 
-                if 0 <= new_x < 30 and 0 <= new_y < 20 and to_visit_area[index_cache[new_x][new_y]]:
-                    new_index = index_cache[new_x][new_y]
+            if 0 <= new_x < 30 and 0 <= new_y < 20 and to_visit_area[index_cache[new_x][new_y]]:
+                new_index = index_cache[new_x][new_y]
 
-                    to_visit_area[new_index] = False
-                    next_value = voronoi_area[new_index]
+                to_visit_area[new_index] = False
+                next_value = voronoi_area[new_index]
 
-                    if next_value == -1:
-                        voronoi_area[new_index] = neighbor_value
-                        voronoi[neighbor_value] += 1
-                        front_nodes.append((new_x, new_y))
-                    elif next_value != -1 and next_value != neighbor_value:
-                        voronoi_area[new_index] = Configuration.NEUTRAL_CODE
-                        voronoi[neutral_index] += 1
+                if next_value == -1:
+                    voronoi_area[new_index] = neighbor_value
+                    voronoi[neighbor_value] += 1
+                    front_nodes.append((new_x, new_y))
+                elif next_value != -1 and next_value != neighbor_value:
+                    voronoi_area[new_index] = Configuration.NEUTRAL_CODE
+                    voronoi[neutral_index] += 1
+
+    return voronoi_area, voronoi
+
+def compute_voronoi_area_without_numpy2(area, last_positions, list_players, index_cache):
+    voronoi_area = [-1] * 600
+    front_nodes = deque()
+    voronoi = {}
+    neutral_index = len(list_players)
+
+    p_indexes = {}
+
+    for player in list_players:
+        p_pos = last_positions[player]
+        p_indexes[player] = index_cache[p_pos[0]][p_pos[1]]
+        voronoi_area[p_indexes[player]] = player
+        front_nodes.append(p_pos)
+        voronoi[player] = 1
+    voronoi[neutral_index] = 0
+
+    available_directions = [[0, -1], [0, 1], [-1, 0], [1, 0]]
+
+    while front_nodes:
+        cur = front_nodes.popleft()
+        x, y = cur[0], cur[1]
+        front_index = index_cache[x][y]
+        neighbor_value = voronoi_area[front_index]
+
+        #if neighbor_value != neutral_index:
+        for off_x, off_y in available_directions:
+            new_x = x + off_x
+            new_y = y + off_y
+
+            if 0 <= new_x < 30 and 0 <= new_y < 20 and area[index_cache[new_x][new_y]]:
+                new_index = index_cache[new_x][new_y]
+                next_value = voronoi_area[new_index]
+
+                if next_value == -1:
+                    voronoi_area[new_index] = neighbor_value
+                    voronoi[neighbor_value] += 1
+                    front_nodes.append((new_x, new_y))
+                elif next_value != neighbor_value:
+                    voronoi_area[new_index] = neutral_index
+                    voronoi[neutral_index] += 1
 
     return voronoi_area, voronoi
 
@@ -494,6 +537,56 @@ def compute_voronoi_area_with_manhattan(area, last_positions, list_players, manh
                     voronoi[neutral_index] += 1
 
     return voronoi_area, voronoi
+
+def compute_voronoi_with_a_star(area, last_positions, list_players, manhattan_cache, index_cache):
+
+    voronoi_area = [-1] * 600
+    front_nodes = deque()
+    voronoi = {}
+    neutral_index = len(list_players)
+
+    p_indexes = {}
+
+    for player in list_players:
+        p_pos = last_positions[player]
+        p_indexes[player] = index_cache[p_pos[0]][p_pos[1]]
+        voronoi_area[p_indexes[player]] = player
+        front_nodes.append(p_pos)
+        voronoi[player] = 1
+    voronoi[neutral_index] = 0
+
+    available_directions = [[0, -1], [0, 1], [-1, 0], [1, 0]]
+
+    while front_nodes:
+        cur = front_nodes.popleft()
+        x, y = cur[0], cur[1]
+
+        for off_x, off_y in available_directions:
+            new_x = x + off_x
+            new_y = y + off_y
+
+            if 0 <= new_x < 30 and 0 <= new_y < 20 and area[index_cache[new_x][new_y]] and voronoi_area[index_cache[new_x][new_y]] == -1:
+
+                min_distance = 1000
+                min_player = -1
+
+                for player in list_players:
+                    distance = compute_path_array_cache(area, last_positions[player], p_indexes[player], (new_x,new_y), index_cache[new_x][new_y], manhattan_cache, index_cache)
+
+                    if distance is not None:
+                        if distance < min_distance:
+                            min_distance = distance
+                            min_player = player
+                        elif distance == min_distance:
+                            min_player = neutral_index
+
+                voronoi_area[index_cache[new_x][new_y]] = min_player
+                voronoi[min_player] += 1
+
+                front_nodes.append((new_x, new_y))
+
+    return voronoi_area, voronoi
+
 
 def heuristic(cell, goal):
     '''
