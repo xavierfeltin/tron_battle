@@ -9,7 +9,7 @@ SELECT_CONSTANT = 1.414213 #value from Wikipedia
 #SELECT_CONSTANT = 10 #value from paper
 NB_TURNS_CHECK = 10 #value from the paper
 A = 1 #value from the paper
-NB_MCTS_ITERATIONS = 40 #experimental
+NB_MCTS_ITERATIONS = 30 #experimental
 
 class Node:
     def __init__(self, parent, value, is_separeted):
@@ -38,25 +38,16 @@ class Node:
         Back propagate the result of the simulation in the branch to the root node
         :param value: 1 if it was a win, 0 for a loss
         '''
-        #if value:
-        #    self.nb_win += 1
-        #    self.score = self.nb_win / self.number_visit
 
-        self.score *= self.number_visit
-
-        if value >= (space-value):
-            self.score += value/space
-        #else:
-        #    self.score -= value / space
-        self.number_visit += 1
-
-        '''    
-        self.score = self.score * self.number_visit
-        self.score += (space / 600)
-        self.number_visit += 1
-        '''
-        self.score = self.score / self.number_visit
-
+        if self.score != 1:
+            if space - value <= 1:
+                self.score = 1
+            else:
+                self.score *= self.number_visit
+                if value > (space-value):
+                    self.score += value/space
+                self.number_visit += 1
+                self.score = self.score / self.number_visit
 
         if self.parent is not None:
             self.parent.back_propagate(value, space)
@@ -173,7 +164,7 @@ class Node:
             start = clock()
             voronoi_area, voronoi_spaces = compute_voronoi(area, current_positions, [0,1], index_cache)
             voronoi_time = (clock() - start) * 1000
-            msg += 'voronoi: ' + str(round(voronoi_time,2)) + 'ms'
+            #msg += 'voronoi: ' + str(round(voronoi_time,2)) + 'ms'
 
             if len(walls[list_players[0]]) >= 10:
                 if not self.is_separeted:
@@ -183,7 +174,7 @@ class Node:
                     start = clock()
                     distance = compute_path(area, current_positions[my_index], index_cache[r_x][r_y],current_positions[1 - my_index], index_cache[g_x][g_y], manhattan_cache, index_cache)
                     path_time = (clock() - start) * 1000
-                    msg += ', path: ' + str(round(path_time,2)) + 'ms'
+                    #msg += ', path: ' + str(round(path_time,2)) + 'ms'
 
                     if distance is None:
                         self.is_separeted = True
@@ -194,13 +185,13 @@ class Node:
                     my_articulation_points = detect_articulation_points(area, initial_positions[my_index], index_cache[initial_positions[my_index][0]][initial_positions[my_index][1]], index_cache)
                     ennemy_articulation_points = detect_articulation_points(area, initial_positions[1 - my_index], index_cache[initial_positions[1 - my_index][0]][initial_positions[1 - my_index][1]], index_cache)
                     articulation_separated_time = (clock() - start) * 1000
-                    msg += ', AP sep: ' + str(round(articulation_separated_time,2)) + 'ms'
+                    #msg += ', AP sep: ' + str(round(articulation_separated_time,2)) + 'ms'
                 else:
                     start = clock()
                     my_articulation_points = detect_articulation_points(area, initial_positions[my_index], index_cache[initial_positions[my_index][0]][initial_positions[my_index][1]],index_cache)
                     ennemy_articulation_points = my_articulation_points
                     articulation_time = (clock() - start) * 1000
-                    msg += ', AP: ' + str(round(articulation_time,2)) + 'ms'
+                    #msg += ', AP: ' + str(round(articulation_time,2)) + 'ms'
 
                 is_in_territory = False
                 if self.is_separeted:
@@ -219,7 +210,7 @@ class Node:
                     start = clock()
                     my_spaces = compute_tree_of_chambers(area, voronoi_area, my_articulation_points , current_positions[my_index], previous_pos,index_cache, my_index)
                     tree_time = (clock()-start) * 1000
-                    msg += ', My tree: ' + str(round(tree_time,2)) + 'ms'
+                    #msg += ', My tree: ' + str(round(tree_time,2)) + 'ms'
                 else:
                     my_spaces = voronoi_spaces[my_index]
 
@@ -241,7 +232,7 @@ class Node:
                     start = clock()
                     ennemy_spaces = compute_tree_of_chambers(area, voronoi_area, ennemy_articulation_points, current_positions[1-my_index], enn_previous_pos,index_cache, (1-my_index))
                     tree_time = (clock() - start) * 1000
-                    msg += ', Ennemy tree: ' + str(round(tree_time,2)) + 'ms'
+                    #msg += ', Ennemy tree: ' + str(round(tree_time,2)) + 'ms'
                 else:
                     ennemy_spaces = voronoi_spaces[1 - my_index]
             else:
@@ -253,11 +244,12 @@ class Node:
             for i in walls:
                 nb_walls += len(walls[i])
 
-            msg += ', my: ' + str(my_spaces) + ', enn: ' + str(ennemy_spaces) + ', null: ' + str(voronoi_spaces[2]) + ', wall: ' + str(nb_walls)
+            msg += ', my: ' + str(voronoi_spaces[0])+'/'+str(my_spaces) + ', enn: ' + str(voronoi_spaces[1])+'/'+str(ennemy_spaces) + ', null: ' + str(voronoi_spaces[2]) + ', wall: ' + str(nb_walls)
             msg += ', total: ' + str(my_spaces+ennemy_spaces+voronoi_spaces[2]+nb_walls)
 
+            '''
             if my_spaces+ennemy_spaces+voronoi_spaces[2]+nb_walls < 500:
-                msg2 = 'depth: ' + str(self.depth) +  ', my: ' + str(my_spaces) + ', enn: ' + str(ennemy_spaces) + ', null: ' + str(
+                msg2 = 'depth: ' + str(self.depth) +  ', my: ' + str(voronoi_spaces[0]) + '/' + str(my_spaces) + ', enn: ' + str(voronoi_spaces[1]) + '/' + str(ennemy_spaces) + ', null: ' + str(
                     voronoi_spaces[2]) + ', wall: ' + str(nb_walls)
                 msg2 += ', total: ' + str(my_spaces + ennemy_spaces + voronoi_spaces[2] + nb_walls)
                 msg2 += '\n'
@@ -270,6 +262,7 @@ class Node:
                     msg2 += '\n'
                 print(msg2, file=sys.stderr, flush=True)
                 print('-----------------', file=sys.stderr, flush=True)
+            '''
             print(msg, flush=True)
 
 
@@ -325,14 +318,14 @@ def compute_MCTS(area, cur_cycles, previous_moves, list_players, my_index, manha
         selected_node = tree.selection()
 
         #Test if the game is arleady in a sure win / loss position
-        if selected_node.is_end_game:
-            selected_node.back_propagate(selected_node.is_always_win, space)
-        else:
-            is_win, space = selected_node.play_out_by_heuristics(area, cur_cycles, previous_moves, list_players, my_index, manhattan_cache, index_cache)
-            if selected_node.is_separeted: selected_node.is_always_win = is_win
-            if not selected_node.is_end_game: selected_node.expansion(area,index_cache)
+        #if selected_node.is_end_game:
+        #    selected_node.back_propagate(selected_node.is_always_win, space)
+        #else:
+        my_space, space = selected_node.play_out_by_heuristics(area, cur_cycles, previous_moves, list_players, my_index, manhattan_cache, index_cache)
+        if selected_node.is_separeted: selected_node.is_always_win = my_space
+        if not selected_node.is_end_game: selected_node.expansion(area,index_cache)
 
-        selected_node.back_propagate(is_win, space)
+        selected_node.back_propagate(my_space, space)
         nb_iteration -= 1
 
     max_score = 0
@@ -379,24 +372,24 @@ def compute_voronoi(area, last_positions, list_players, index_cache):
 
         neighbor_value = voronoi_area[front_index]
 
-        # if neighbor_value != Configuration.NEUTRAL_CODE:
-        for off_x, off_y in available_directions:
-            new_x = x + off_x
-            new_y = y + off_y
+        if neighbor_value != neutral_index:
+            for off_x, off_y in available_directions:
+                new_x = x + off_x
+                new_y = y + off_y
 
-            if 0 <= new_x < 30 and 0 <= new_y < 20 and to_visit_area[index_cache[new_x][new_y]]:
-                new_index = index_cache[new_x][new_y]
+                if 0 <= new_x < 30 and 0 <= new_y < 20 and to_visit_area[index_cache[new_x][new_y]]:
+                    new_index = index_cache[new_x][new_y]
 
-                to_visit_area[new_index] = False
-                next_value = voronoi_area[new_index]
+                    to_visit_area[new_index] = False
+                    next_value = voronoi_area[new_index]
 
-                if next_value == -1:
-                    voronoi_area[new_index] = neighbor_value
-                    voronoi[neighbor_value] += 1
-                    front_nodes.append((new_x, new_y))
-                elif next_value != -1 and next_value != neighbor_value:
-                    voronoi_area[new_index] = neutral_index
-                    voronoi[neutral_index] += 1
+                    if next_value == -1:
+                        voronoi_area[new_index] = neighbor_value
+                        voronoi[neighbor_value] += 1
+                        front_nodes.append((new_x, new_y))
+                    elif next_value != -1 and next_value != neighbor_value:
+                        voronoi_area[new_index] = neutral_index
+                        voronoi[neutral_index] += 1
 
     return voronoi_area, voronoi
 
@@ -557,12 +550,10 @@ def compute_tree_of_chambers(area, voronoi_area, articulation_points, current_po
     best_space = 0
     for chamber in list_chambers:
         if chamber.is_leaf:
-            current_space = 0
+            current_space = chamber.space
             parent = chamber.parent
-            new_chamber = chamber
             while parent != origin_chamber:
-                current_space += new_chamber.space
-                new_chamber = parent
+                current_space += parent.space
                 parent = parent.parent
 
             if best_space < current_space:
@@ -666,6 +657,8 @@ class MCTSBot():
 
         x_root, y_root = self.current_move[my_index][0], self.current_move[my_index][1]
         x_goal, y_goal =  self.current_move[1 - my_index][0], self.current_move[1 - my_index][1]
+
+        '''
         distance = compute_path(self.area, self.current_move[my_index], self.index_cache[x_root][y_root], self.current_move[1 - my_index], self.index_cache[x_goal][y_goal], self.manhattan_cache, self.index_cache)
 
         if distance is None:
@@ -697,7 +690,8 @@ class MCTSBot():
                         elif new_y - self.current_move[my_index][1] < 0:
                             direction = 'UP'
         else:
-            direction = compute_MCTS(self.area, self.current_move, self.wall_cycles, self.list_players, my_index, self.manhattan_cache, self.index_cache)
+        '''
+        direction = compute_MCTS(self.area, self.current_move, self.wall_cycles, self.list_players, my_index, self.manhattan_cache, self.index_cache)
 
         print(direction, flush=True)
         self.turn += 1
