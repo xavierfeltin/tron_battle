@@ -9,11 +9,11 @@ SELECT_CONSTANT = 1.414213 #value from Wikipedia
 #SELECT_CONSTANT = 10 #value from paper
 NB_TURNS_CHECK = 10 #value from the paper
 A = 1 #value from the paper
-NB_MCTS_ITERATIONS = 30 #experimental
+NB_MCTS_ITERATIONS = 40 #experimental
 
 class Node:
     def __init__(self, parent, value, is_separeted):
-        self.score = 0.0
+        self.score = -1
         self.nb_win = 0
         self.number_visit = 1
         self.is_end_game = False
@@ -39,8 +39,10 @@ class Node:
         :param value: 1 if it was a win, 0 for a loss
         '''
 
-        if self.score != 1:
-            if space - value <= 1:
+        if self.score != 1 and self.score != 0:
+            if space == 0:
+                self.score = 0
+            elif space - value <= 1 and value > 1:
                 self.score = 1
             else:
                 self.score *= self.number_visit
@@ -348,16 +350,16 @@ def compute_MCTS(area, cur_cycles, previous_moves, list_players, my_index, manha
 
 def compute_voronoi(area, last_positions, list_players, index_cache):
 
-    to_visit_area = area[:]
-    to_visit_area[index_cache[last_positions[0][0]][last_positions[0][1]]] = True
-    to_visit_area[index_cache[last_positions[1][0]][last_positions[1][1]]] = True
+    #to_visit_area = area[:]
+    #to_visit_area[index_cache[last_positions[0][0]][last_positions[0][1]]] = True
+    #to_visit_area[index_cache[last_positions[1][0]][last_positions[1][1]]] = True
 
     voronoi_area = [-1] * 600
     voronoi_area[index_cache[last_positions[0][0]][last_positions[0][1]]] = list_players[0]
     voronoi_area[index_cache[last_positions[1][0]][last_positions[1][1]]] = list_players[1]
 
     neutral_index = len(list_players)
-    voronoi = [1] * (neutral_index + 1)
+    voronoi = [0] * (neutral_index + 1)
     voronoi[neutral_index] = 0
 
     front_nodes = deque()
@@ -377,10 +379,10 @@ def compute_voronoi(area, last_positions, list_players, index_cache):
                 new_x = x + off_x
                 new_y = y + off_y
 
-                if 0 <= new_x < 30 and 0 <= new_y < 20 and to_visit_area[index_cache[new_x][new_y]]:
+                if 0 <= new_x < 30 and 0 <= new_y < 20 and area[index_cache[new_x][new_y]] :# and to_visit_area[index_cache[new_x][new_y]]:
                     new_index = index_cache[new_x][new_y]
 
-                    to_visit_area[new_index] = False
+                    #to_visit_area[new_index] = False
                     next_value = voronoi_area[new_index]
 
                     if next_value == -1:
@@ -497,7 +499,7 @@ def compute_tree_of_chambers(area, voronoi_area, articulation_points, current_po
     # Step 0: Build first chamber and entrance is the step before the current position
     # note that chamber_area[previous_position] == None
     new_chamber = Chamber(previous_position, 0)
-    new_chamber.space = 1
+    new_chamber.space = 0
     origin_chamber = new_chamber
 
     chamber_area[index_cache[current_position[0]][current_position[1]]] = new_chamber
