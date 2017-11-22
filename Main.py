@@ -31,9 +31,9 @@ if __name__ == "__main__":
     engine = GameEngine(NB_PLAYERS)
 
     players = []
-    players.append(MinimaxBot())
+    players.append(MCTSBot())
     for i in range(NB_PLAYERS-1):
-        players.append(MCTSBot())
+        players.append(ExplicitBot())
 
     main_frame = GameFrame(engine)
 
