@@ -16,14 +16,34 @@ class Node:
 
         self.area = p_area[:]
 
-        self.position = p_new_position
+
+        self.positions = {}
         self.prev_positions = {}
-        if p_is_my_turn:
+        if p_parent is None:
+            #root case: current state of the game
             self.prev_positions[0] = p_previous_positions[0]
-            self.prev_positions[1] = p_parent.position
-        else:
-            self.prev_positions[0] = p_parent.position
+            self.positions[0] = p_new_position[0]
+
             self.prev_positions[1] = p_previous_positions[1]
+            self.positions[1] = p_new_position[1]
+
+        else:
+            if p_is_my_turn:
+                #Ennemy just played
+                self.prev_positions[1] = p_parent.positions[1]
+                self.positions[1] = p_new_position
+
+                #Player conserves last played positions
+                self.prev_positions[0] = p_parent.prev_positions[0]
+                self.positions[0] = p_parent.positions[0]
+            else:
+                #Player just played
+                self.prev_positions[0] = p_parent.positions[0]
+                self.positions[0] = p_new_position
+
+                #Ennemy conserves last played positions
+                self.prev_positions[1] = p_parent.prev_positions[1]
+                self.positions[1] = p_parent.positions[1]
 
         for prev_position in p_previous_positions:
             self.area[prev_position] = False
@@ -52,8 +72,15 @@ class Node:
                 offsets = [[1, 0], [-1, 0], [0, 1], [0, -1]]
                 nb_node_children = 0
                 for off_x, off_y in offsets:
-                    new_x = self.position[0] + off_x
-                    new_y = self.position[1] + off_y
+                    if node.is_my_turn:
+                        #Generate players next moves
+                        pos = self.positions[0]
+                    else:
+                        #Generate ennemy next moves
+                        pos = self.positions[1]
+
+                    new_x = pos[0] + off_x
+                    new_y = pos[1] + off_y
 
                     if 0 <= new_x < 30 and 0 <= new_y < 20 and node.area[index_cache[new_x][new_y]]:
                         child = node.add_child(node.prev_positions, (new_x, new_y), node.is_separeted)
@@ -82,38 +109,144 @@ class Node:
                 winner = child
                 break
 
-        return winner
+        return winner.positions[0]
 
-    def evaluate(self):
+    def evaluate(self, manhattan_cache, index_cache):
         '''
         Evaluate the score of the leaf (based on the space remaining for the players)
         '''
-        score = 0
-        return score
+
+        my_index = 0 #TODO: make my_index a variable like for real game
+
+        msg = ''
+        start = clock()
+        voronoi_area, voronoi_spaces = compute_voronoi(self.area, self.positions, [0, 1], index_cache)
+        voronoi_time = (clock() - start) * 1000
+        msg += 'voronoi: ' + str(round(voronoi_time,2)) + 'ms'
+
+        if not self.is_separeted:
+            #r_x, r_y = self.positions[my_index][0], self.positions[my_index][1]
+            #g_x, g_y = self.positions[1 - my_index][0], self.positions[1 - my_index][1]
+
+            #start = clock()
+            #distance = compute_path(self.area, self.positions[my_index], index_cache[r_x][r_y],
+            #                        self.positions[1 - my_index], index_cache[g_x][g_y], manhattan_cache,
+            #                        index_cache)
+            #path_time = (clock() - start) * 1000
+            # msg += ', path: ' + str(round(path_time,2)) + 'ms'
+
+            if voronoi_spaces[2] == 0:
+                self.is_separeted = True
+                # self.is_end_game = True
+
+        if self.is_separeted:
+            start = clock()
+            my_articulation_points = detect_articulation_points(self.area, self.positions[my_index],
+                                                                index_cache[self.positions[my_index][0]][
+                                                                    self.positions[my_index][1]], index_cache)
+            ennemy_articulation_points = detect_articulation_points(self.area, self.positions[1 - my_index],
+                                                                    index_cache[self.positions[1 - my_index][0]][
+                                                                        self.positions[1 - my_index][1]],
+                                                                    index_cache)
+            articulation_separated_time = (clock() - start) * 1000
+            msg += ', AP sep: ' + str(round(articulation_separated_time,2)) + 'ms'
+        else:
+            start = clock()
+            my_articulation_points = detect_articulation_points(self.area, self.positions[my_index],
+                                                                index_cache[self.positions[my_index][0]][
+                                                                    self.positions[my_index][1]], index_cache)
+            ennemy_articulation_points = my_articulation_points
+            articulation_time = (clock() - start) * 1000
+            msg += ', AP: ' + str(round(articulation_time,2)) + 'ms'
+
+        is_in_territory = False
+        if self.is_separeted:
+            is_in_territory = len(my_articulation_points) > 0
+        else:
+            for articulation in my_articulation_points:
+                if voronoi_area[articulation] == my_index:
+                    is_in_territory = True
+                    break
+
+        if is_in_territory:
+            start = clock()
+            my_spaces = compute_tree_of_chambers(self.area, voronoi_area, my_articulation_points,
+                                                 self.positions[my_index], self.prev_positions[0], index_cache, my_index)
+            tree_time = (clock() - start) * 1000
+            msg += ', My tree: ' + str(round(tree_time,2)) + 'ms'
+        else:
+            my_spaces = voronoi_spaces[my_index]
+
+        is_in_territory = False
+        if self.is_separeted:
+            is_in_territory = len(ennemy_articulation_points) > 0
+        else:
+            for articulation in ennemy_articulation_points:
+                if voronoi_area[articulation] == (1 - my_index):
+                    is_in_territory = True
+                    break
+
+        if is_in_territory:
+            start = clock()
+            ennemy_spaces = compute_tree_of_chambers(self.area, voronoi_area, ennemy_articulation_points,
+                                                     self.positions[1 - my_index], self.prev_positions[1], index_cache,
+                                                     (1 - my_index))
+            tree_time = (clock() - start) * 1000
+            msg += ', Ennemy tree: ' + str(round(tree_time,2)) + 'ms'
+        else:
+            ennemy_spaces = voronoi_spaces[1 - my_index]
+
+        print(msg, flush=True)
+
+        if my_spaces == 0:
+            return -inf
+        elif ennemy_spaces == 0:
+            return inf
+        else:
+            self.score = my_spaces-ennemy_spaces
 
 
-def minimax(node, depth, is_maximizing_player):
+def minimax(node, alpha, beta, depth, is_maximizing_player, manhattan_cache, index_cache):
     '''
     Compute the minimax of the node set in parameter
     maximise or minimize function of the argument
+    Add alpha-beta pruning
     :return: the best value for the player to play this turn
     '''
-    if depth == 0 or node.is_end_game:
-        return node.evaluate()
+
+    if depth == 0 or len(node.children) == 0:
+        node.evaluate(manhattan_cache, index_cache)
+        return node.score
 
     if is_maximizing_player:
-        bestValue = -inf
+        best_value = -inf
         for child in node.children:
-            score = minimax(child, depth-1, False)
-            bestValue = max(bestValue, score)
-        return bestValue
+            score = minimax(child, alpha, beta, depth-1, False, manhattan_cache, index_cache)
+            best_value = max(best_value, score)
+
+            if best_value >= beta:
+                node.score = best_value
+                return best_value
+            alpha = max(alpha, best_value)
+        #node.score = best_value
+        #return best_value
 
     else:
-        bestValue = inf
+        best_value = inf
         for child in node.children:
-            score = minimax(child, depth-1, True)
-            bestValue = min(bestValue, score)
-        return bestValue
+            score = minimax(child, alpha, beta, depth-1, True, manhattan_cache, index_cache)
+            best_value = min(best_value, score)
+
+            if alpha >= best_value:
+                node.score = best_value
+                return best_value
+            beta = min(beta, best_value)
+
+        #node.score = best_value
+        #return best_value
+
+    node.score = best_value
+    return best_value
 
 class MinimaxBot():
     def __init__(self):
@@ -172,11 +305,32 @@ class MinimaxBot():
                     self.list_players.remove(i)
                     self.list_players_without_me.remove(i)
 
+        r_x = self.current_move[0][0]
+        r_y = self.current_move[0][1]
+        g_x = self.current_move[1][0]
+        g_y = self.current_move[1][1]
 
-        tree = Node(None, True, self.area, self.previous_move, self.current_move[0], False)
-        tree.expand(self.index_cache, 5)
-        #minimax(tree, 5, True)
+        distance = compute_path(self.area, self.current_move[my_index], self.index_cache[r_x][r_y],
+                                           self.current_move[1 - my_index], self.index_cache[g_x][g_y], self.manhattan_cache,
+                                           self.index_cache)
+
+        MAX_DEPTH = 7
+        start = clock()
+        tree = Node(None, True, self.area, self.previous_move, self.current_move, distance is None)
+        tree.expand(self.index_cache, MAX_DEPTH)
+        print('time to expand: ' + str((clock()-start)*1000), flush=True)
+
+        score = minimax(tree, -inf, inf, MAX_DEPTH, True, self.manhattan_cache, self.index_cache)
+        next_position = tree.selection(score)
+
+        current_position = self.current_move[0]
+        direction = ''
+        if next_position[0] - current_position[0] > 0: direction = 'RIGHT'
+        elif next_position[0] - current_position[0] < 0: direction = 'LEFT'
+        elif next_position[1] - current_position[1] > 0: direction = 'DOWN'
+        elif next_position[1] - current_position[1] < 0: direction = 'UP'
+
+        self.turn += 1
 
         print(direction, flush=True)
-        self.turn += 1
         return direction

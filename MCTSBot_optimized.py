@@ -167,17 +167,17 @@ class Node:
             voronoi_time = (clock() - start) * 1000
             #msg += 'voronoi: ' + str(round(voronoi_time,2)) + 'ms'
 
-            if len(walls[list_players[0]]) >= 10:
+            if len(walls[list_players[0]]) >= 10 and voronoi_spaces[0] != 0 and voronoi_spaces[1] != 0:
                 if not self.is_separeted:
                     r_x,r_y = current_positions[my_index][0], current_positions[my_index][1]
                     g_x,g_y = current_positions[1 - my_index][0], current_positions[1 - my_index][1]
 
-                    start = clock()
-                    distance = compute_path(area, current_positions[my_index], index_cache[r_x][r_y],current_positions[1 - my_index], index_cache[g_x][g_y], manhattan_cache, index_cache)
-                    path_time = (clock() - start) * 1000
+                    #start = clock()
+                    #distance = compute_path(area, current_positions[my_index], index_cache[r_x][r_y],current_positions[1 - my_index], index_cache[g_x][g_y], manhattan_cache, index_cache)
+                    #path_time = (clock() - start) * 1000
                     #msg += ', path: ' + str(round(path_time,2)) + 'ms'
 
-                    if distance is None:
+                    if voronoi_spaces[2] == 0:
                         self.is_separeted = True
                         #self.is_end_game = True
 
@@ -240,7 +240,6 @@ class Node:
                 my_spaces = voronoi_spaces[my_index]
                 ennemy_spaces = voronoi_spaces[1 - my_index]
 
-
             nb_walls = 0
             for i in walls:
                 nb_walls += len(walls[i])
@@ -248,28 +247,7 @@ class Node:
             msg += ', my: ' + str(voronoi_spaces[0])+'/'+str(my_spaces) + ', enn: ' + str(voronoi_spaces[1])+'/'+str(ennemy_spaces) + ', null: ' + str(voronoi_spaces[2]) + ', wall: ' + str(nb_walls)
             msg += ', total: ' + str(my_spaces+ennemy_spaces+voronoi_spaces[2]+nb_walls)
 
-            '''
-            if my_spaces+ennemy_spaces+voronoi_spaces[2]+nb_walls < 500:
-                msg2 = 'depth: ' + str(self.depth) +  ', my: ' + str(voronoi_spaces[0]) + '/' + str(my_spaces) + ', enn: ' + str(voronoi_spaces[1]) + '/' + str(ennemy_spaces) + ', null: ' + str(
-                    voronoi_spaces[2]) + ', wall: ' + str(nb_walls)
-                msg2 += ', total: ' + str(my_spaces + ennemy_spaces + voronoi_spaces[2] + nb_walls)
-                msg2 += '\n'
-                msg2 += 'me: ' + str(current_positions[my_index]) +', ennemy: ' + str(current_positions[1-my_index])
-                msg2 += '\n'
-                for i in range(30):
-                    msg2 += ' '
-                    for j in range(20):
-                        msg2 += str(area[index_cache[i][j]]) + ' '
-                    msg2 += '\n'
-                print(msg2, file=sys.stderr, flush=True)
-                print('-----------------', file=sys.stderr, flush=True)
-            '''
             print(msg, flush=True)
-
-
-            area[index_cache[walls[my_index][-1][0]][walls[my_index][-1][1]]] = False
-            area[index_cache[walls[1-my_index][-1][0]][walls[1-my_index][-1][1]]] = False
-
             return my_spaces, my_spaces + ennemy_spaces
 
         else:
