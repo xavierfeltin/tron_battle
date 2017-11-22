@@ -1,93 +1,85 @@
 import sys
-from math import sqrt, log
+from math import sqrt, log, inf
 from random import randint
 from time import clock
 from Utils import compute_path, detect_articulation_points, compute_tree_of_chambers, compute_voronoi, generate_index_cache, generate_manhattan_cache
 
 
 class Node:
-    def __init__(self, p_parent, p_is_my_turn, p_area, p_previous_position, p_new_position, p_is_separeted):
+    def __init__(self, p_parent, p_is_my_turn, p_area, p_previous_positions, p_new_position, p_is_separeted):
         self.score = -1
         self.is_my_turn = p_is_my_turn
         self.is_separeted = p_is_separeted
 
         self.parent = p_parent
         self.children = []
-        self.depth = p_parent.depth + 1
 
-        self.area = p_area
+        self.area = p_area[:]
 
-        if self.is_my_turn:
-            self.my_prev_position = p_previous_position
-            self.my_position = p_new_position
+        self.position = p_new_position
+        self.prev_positions = {}
+        if p_is_my_turn:
+            self.prev_positions[0] = p_previous_positions[0]
+            self.prev_positions[1] = p_parent.position
         else:
-            self.ennemy_prev_position = p_previous_position
-            self.ennemy_position = p_new_position
+            self.prev_positions[0] = p_parent.position
+            self.prev_positions[1] = p_previous_positions[1]
+
+        for prev_position in p_previous_positions:
+            self.area[prev_position] = False
 
     def add_child(self, previous_positions, new_position, is_separeted):
-        child = Node(self, not self.is_my_turn, previous_positions, new_position, is_separeted)
+        child = Node(self, not self.is_my_turn, self.area, previous_positions, new_position, is_separeted)
         self.children.append(child)
         return child
 
-    def expansion(self, context_area, index_cache):
+    def expand(self, index_cache, p_depth):
         '''
         Create the next turn of the game
         Forbid to add a previous move done by the player in the tree
         and done by all players in previous simulation step
         '''
 
-        area = context_area[:]
+        depth = p_depth
+        front_nodes = [self]
+        nb_children = 1
 
-        if self.is_my_turn:
-            area[index_cache[self.my_position[0]][self.my_position[1]]] = False
-            previous_position = self.ennemy_prev_position
-        else:
-            area[index_cache[self.ennemy_position[0]][self.ennemy_position[1]]] = False
-            previous_position = self.my_prev_position
+        while(depth > 0 and nb_children > 0):
 
-        if self.depth < 5:
-            offsets = [[1, 0], [-1, 0], [0, 1], [0, -1]]
-            for off_x, off_y in offsets:
-                new_x = previous_position[0] + off_x
-                new_y = previous_position[1] + off_y
+            nb_children = 0
+            next_nodes = []
+            for node in front_nodes:
+                offsets = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+                nb_node_children = 0
+                for off_x, off_y in offsets:
+                    new_x = self.position[0] + off_x
+                    new_y = self.position[1] + off_y
 
-                if 0 <= new_x < 30 and 0 <= new_y < 20 and area[index_cache[new_x][new_y]]:
-                    self.add_child(previous_position, (new_x, new_y), self.is_separeted)
-        else:
-            self.score = self.evaluate()
+                    if 0 <= new_x < 30 and 0 <= new_y < 20 and node.area[index_cache[new_x][new_y]]:
+                        child = node.add_child(node.prev_positions, (new_x, new_y), node.is_separeted)
+                        next_nodes.append(child)
+                        nb_node_children += 1
 
-    def back_propagate(self, value, space):
-        '''
-        Back propagate the result of the simulation in the branch to the root node
-        :param value: 1 if it was a win, 0 for a loss
-        '''
+                if nb_node_children > 0:
+                    nb_children += nb_node_children
+                else:
+                    node.is_end_game = True
 
-        if self.is_my_turn:
-            best_score = 0
-            for node in self.children:
-                if node.score > best_score:
-                    best_score = node.score
-            return best_score
-        else:
-            min_score = 1000
-            for node in self.children:
-                if min_score > node.score:
-                    min_score = node.score
-            return min_score
+            if nb_children > 0:
+                front_nodes = next_nodes
 
-        if self.parent is not None:
-            self.parent.back_propagate(value, space)
+            depth -= 1
 
-    def selection(self):
+    def selection(self, p_score):
         '''
         selection of the node that will be played by the bot
         :return: Node
         '''
 
         winner = None
-        for node in self.children:
-            if node.score == self.score:
-                winner = node
+        for child in self.children:
+            if child.score == p_score:
+                winner = child
                 break
 
         return winner
@@ -100,15 +92,28 @@ class Node:
         return score
 
 
-def compute_Minimax(area, cur_cycles, previous_moves, list_players, my_index, manhattan_cache, index_cache):
+def minimax(node, depth, is_maximizing_player):
     '''
-    Compute the MCTS tree from the current situation
-    :return: direction to take for this simulation step
+    Compute the minimax of the node set in parameter
+    maximise or minimize function of the argument
+    :return: the best value for the player to play this turn
     '''
+    if depth == 0 or node.is_end_game:
+        return node.evaluate()
 
-    current_position = cur_cycles[my_index]
-    tree = Node(None, current_position, False)
-    tree.expansion(area,index_cache)
+    if is_maximizing_player:
+        bestValue = -inf
+        for child in node.children:
+            score = minimax(child, depth-1, False)
+            bestValue = max(bestValue, score)
+        return bestValue
+
+    else:
+        bestValue = inf
+        for child in node.children:
+            score = minimax(child, depth-1, True)
+            bestValue = min(bestValue, score)
+        return bestValue
 
 class MinimaxBot():
     def __init__(self):
@@ -167,7 +172,10 @@ class MinimaxBot():
                     self.list_players.remove(i)
                     self.list_players_without_me.remove(i)
 
-        direction = compute_Minimax(self.area, self.current_move, self.wall_cycles, self.list_players, my_index, self.manhattan_cache, self.index_cache)
+
+        tree = Node(None, True, self.area, self.previous_move, self.current_move[0], False)
+        tree.expand(self.index_cache, 5)
+        #minimax(tree, 5, True)
 
         print(direction, flush=True)
         self.turn += 1
