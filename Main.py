@@ -10,7 +10,7 @@ from MCTSBot_optimized import MCTSBot
 from MinimaxBot import MinimaxBot
 from time import sleep
 
-NB_PLAYERS = 2
+NB_PLAYERS = 4
 
 def game_loop(engine, main_frame):
     gc.disable()
@@ -32,7 +32,7 @@ if __name__ == "__main__":
     engine = GameEngine(NB_PLAYERS)
 
     players = []
-    players.append(MCTSBot())
+    players.append(ExplicitBot())
     for i in range(NB_PLAYERS-1):
         players.append(ExplicitBot())
 

@@ -45,6 +45,12 @@ class ExplicitBot(Bot):
                     self.current_move[i] = (x0, y0)
                     self.wall_cycles[i] = [(x0, y0)]
                     self.area[self.index_cache[x0][y0]] = False
+
+                    if i < my_index:  # players playing before me have already made a move
+                        self.previous_move[i] = (x0, y0)
+                        self.current_move[i] = (x1, y1)
+                        self.wall_cycles[i] = [(x1, y1)]
+                        self.area[self.index_cache[x1][y1]] = False
                 else:
                     self.previous_move[i] = self.current_move[i]
                     self.current_move[i] = (x1,y1)
@@ -54,7 +60,7 @@ class ExplicitBot(Bot):
                 # If player has lost, remove his wall from the game
                 if i in self.current_move:
                     for case in self.wall_cycles[i]:
-                        self.area[self.index_cache[case[0]][case[1]]] = False
+                        self.area[self.index_cache[case[0]][case[1]]] = True
 
                     del self.current_move[i]
                     del self.wall_cycles[i]
@@ -96,8 +102,15 @@ class ExplicitBot(Bot):
                         availables_spaces[player] = compute_tree_of_chambers(self.area, voronoi_area, articulation_points[player], new_pos[player], previous_pos, self.index_cache, my_index)
 
                 ennemies_space = 0
+                max_ennemi_space = 0
                 for player in self.list_players_without_me:
-                    ennemies_space += availables_spaces[player]
+                    if availables_spaces[player] > max_ennemi_space :
+                        max_ennemi_space = availables_spaces[player]
+                    #ennemies_space += availables_spaces[player]
+                ennemies_space = max_ennemi_space
+                #ennemies_space += voronoi_spaces[5]
+
+                print('player-' + str(my_index) + ' cur:' + str((cur_pos[0],cur_pos[1])) + ', new:' + str((new_x,new_y)) + ': ' + str(availables_spaces[my_index]) + '/' + str(ennemies_space) + ', ' + str(voronoi_spaces), flush=True)
 
                 #First maximise my own space
                 if availables_spaces[my_index] > max_space:

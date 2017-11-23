@@ -177,7 +177,7 @@ class Node:
                     #path_time = (clock() - start) * 1000
                     #msg += ', path: ' + str(round(path_time,2)) + 'ms'
 
-                    if voronoi_spaces[2] == 0:
+                    if voronoi_spaces[5] == 0:
                         self.is_separeted = True
                         #self.is_end_game = True
 
@@ -244,10 +244,10 @@ class Node:
             for i in walls:
                 nb_walls += len(walls[i])
 
-            msg += ', my: ' + str(voronoi_spaces[0])+'/'+str(my_spaces) + ', enn: ' + str(voronoi_spaces[1])+'/'+str(ennemy_spaces) + ', null: ' + str(voronoi_spaces[2]) + ', wall: ' + str(nb_walls)
-            msg += ', total: ' + str(my_spaces+ennemy_spaces+voronoi_spaces[2]+nb_walls)
+            msg += ', my: ' + str(voronoi_spaces[0])+'/'+str(my_spaces) + ', enn: ' + str(voronoi_spaces[1])+'/'+str(ennemy_spaces) + ', null: ' + str(voronoi_spaces[5]) + ', wall: ' + str(nb_walls)
+            msg += ', total: ' + str(my_spaces+ennemy_spaces+voronoi_spaces[5]+nb_walls)
 
-            print(msg, flush=True)
+            #print(msg, flush=True)
             return my_spaces, my_spaces + ennemy_spaces
 
         else:
@@ -365,6 +365,12 @@ class MCTSBot():
                     self.current_move[i] = (x0, y0)
                     self.wall_cycles[i] = [(x0, y0)]
                     self.area[self.index_cache[x0][y0]] = False
+
+                    if i < my_index:  # players playing before me have already made a move
+                        self.previous_move[i] = (x0, y0)
+                        self.current_move[i] = (x1, y1)
+                        self.wall_cycles[i] = [(x1, y1)]
+                        self.area[self.index_cache[x1][y1]] = False
                 else:
                     self.previous_move[i] = self.current_move[i]
                     self.current_move[i] = (x1,y1)
@@ -374,7 +380,7 @@ class MCTSBot():
                 # If player has lost, remove his wall from the game
                 if i in self.current_move:
                     for case in self.wall_cycles[i]:
-                        self.area[self.index_cache[case[0]][case[1]]] = False
+                        self.area[self.index_cache[case[0]][case[1]]] = True
 
                     del self.current_move[i]
                     del self.wall_cycles[i]

@@ -11,12 +11,12 @@ def compute_voronoi(area, last_positions, list_players, index_cache):
     front_nodes = deque()
 
     voronoi_area = [-1] * 600
+    voronoi = {}
     for player in list_players:
         voronoi_area[index_cache[last_positions[player][0]][last_positions[player][1]]] = player
         front_nodes.append(last_positions[player])
-
-    neutral_index = len(list_players)
-    voronoi = [0] * (neutral_index + 1)
+        voronoi[player] = 0
+    neutral_index = 5
     voronoi[neutral_index] = 0
 
     available_directions = [[0, -1], [0, 1], [-1, 0], [1, 0]]
@@ -45,6 +45,7 @@ def compute_voronoi(area, last_positions, list_players, index_cache):
                     elif next_value != -1 and next_value != neighbor_value:
                         voronoi_area[new_index] = neutral_index
                         voronoi[neutral_index] += 1
+                        voronoi[next_value] -= 1
 
     return voronoi_area, voronoi
 
