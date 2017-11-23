@@ -8,17 +8,16 @@ def compute_voronoi(area, last_positions, list_players, index_cache):
     #to_visit_area[index_cache[last_positions[0][0]][last_positions[0][1]]] = True
     #to_visit_area[index_cache[last_positions[1][0]][last_positions[1][1]]] = True
 
+    front_nodes = deque()
+
     voronoi_area = [-1] * 600
-    voronoi_area[index_cache[last_positions[0][0]][last_positions[0][1]]] = list_players[0]
-    voronoi_area[index_cache[last_positions[1][0]][last_positions[1][1]]] = list_players[1]
+    for player in list_players:
+        voronoi_area[index_cache[last_positions[player][0]][last_positions[player][1]]] = player
+        front_nodes.append(last_positions[player])
 
     neutral_index = len(list_players)
     voronoi = [0] * (neutral_index + 1)
     voronoi[neutral_index] = 0
-
-    front_nodes = deque()
-    front_nodes.append(last_positions[0])
-    front_nodes.append(last_positions[1])
 
     available_directions = [[0, -1], [0, 1], [-1, 0], [1, 0]]
     while front_nodes:
@@ -33,7 +32,7 @@ def compute_voronoi(area, last_positions, list_players, index_cache):
                 new_x = x + off_x
                 new_y = y + off_y
 
-                if 0 <= new_x < 30 and 0 <= new_y < 20 and area[index_cache[new_x][new_y]] :# and to_visit_area[index_cache[new_x][new_y]]:
+                if 0 <= new_x < 30 and 0 <= new_y < 20 and area[index_cache[new_x][new_y]] :
                     new_index = index_cache[new_x][new_y]
 
                     #to_visit_area[new_index] = False

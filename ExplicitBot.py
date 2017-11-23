@@ -200,8 +200,10 @@ class ExplicitBot(Bot):
         if new_direction != (0, 0):
             self.opposite_direction = (new_direction[0] * -1, new_direction[1] * -1)
 
-        return direction
         self.turn += 1
+
+        return direction
+
 
 
 
