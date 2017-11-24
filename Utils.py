@@ -1,6 +1,7 @@
 from collections import deque
 from heapq import heappop, heappush
 from time import clock
+from math import inf
 
 def compute_voronoi(area, last_positions, list_players, index_cache):
 
@@ -95,6 +96,7 @@ class Chamber:
         self.parent = p_parent
         self.depth = p_depth
         self.is_leaf = True
+        self.is_conflicted = False
 
 def detect_articulation_points(area, root, r_index, index_cache):
     '''
@@ -220,6 +222,94 @@ def compute_tree_of_chambers(area, voronoi_area, articulation_points, current_po
 
     return best_space
 
+def compute_tree_of_chambers_AP(area, voronoi_area, articulation_points, current_position, previous_position, index_cache, player_index):
+    '''
+    Compute the space available with the Tree of chambers algorithm
+    '''
+
+    list_chambers = []
+
+    chamber_area = [None] * 600  # used as an equivalent of visited_area in BFS algorithm
+
+    front_nodes = deque()
+    available_directions = [[0, -1], [0, 1], [-1, 0], [1, 0]]
+
+    # Step 0: Build first chamber and entrance is the step before the current position
+    # note that chamber_area[previous_position] == None
+    new_chamber = Chamber(previous_position, 0)
+    new_chamber.space = 0
+    origin_chamber = new_chamber
+
+    chamber_area[index_cache[current_position[0]][current_position[1]]] = new_chamber
+    front_nodes.append(current_position)
+
+    depth = 1
+
+    # Step 1: Search other chambers
+    while front_nodes:
+        cur = front_nodes.popleft()
+        x, y = cur[0], cur[1]
+        current_index = index_cache[x][y]
+        current_chamber = chamber_area[current_index]
+
+        for off_x, off_y in available_directions:
+            new_x = x + off_x
+            new_y = y + off_y
+
+            if 0 <= new_x < 30 and 0 <= new_y < 20 and area[index_cache[new_x][new_y]]:
+                new_index = index_cache[new_x][new_y]
+
+                # Step 1-1: if neighbor not in voronoi area of the player => ignore it !
+                if voronoi_area[new_index] == player_index:
+                    is_bottle_neck = new_index in articulation_points
+
+                    if chamber_area[new_index] is None and not is_bottle_neck:
+                        # Step 1-2: if neighbor without chamber and not articulation point:
+                        # set current chamber to the neighbor
+                        # increment chamber size
+                        # add neighbor to the front queue
+                        chamber_area[new_index] = current_chamber
+                        current_chamber.space += 1
+                        front_nodes.append((new_x, new_y))
+                        #if voronoi_area[new_index] == 5: current_chamber.is_conflicted = True
+                    elif chamber_area[new_index] is None and is_bottle_neck:
+                        # Step 1-3: if neighbor without chamber and is an articulation point:
+                        # create a new chamber and affect it to the neighbor
+                        # set chamber size to 1
+                        # add neighbor to the front queue
+                        depth += 1
+                        new_chamber = Chamber((new_x, new_y), depth, current_chamber)
+                        new_chamber.space = 0
+                        list_chambers.append(new_chamber)
+
+                        chamber_area[new_index] = new_chamber
+                        current_chamber.is_leaf = False
+                        front_nodes.append((new_x, new_y))
+                        #if voronoi_area[new_index] == 5: new_chamber.is_conflicted = True
+
+    # Step 2: Compute spaces between the different leaf chambers and root chamber
+    # Step 3: Select best solution (more space => better solution)
+    best_space = 0
+    for chamber in list_chambers:
+        if chamber.is_leaf:
+            current_space = chamber.space
+            #if chamber.is_conflicted: current_space = 0
+
+            parent = chamber.parent
+            while parent != origin_chamber:
+                current_space += parent.space
+                #if parent.is_conflicted: current_space = 0
+                parent = parent.parent
+            if best_space < current_space:
+                best_space = current_space
+
+    # No other chambers than the origin one
+    best_space += origin_chamber.space
+
+    return best_space
+
+
+
 def generate_manhattan_cache():
     '''
     Cache to store all the manhattan distance between the different grid cells
@@ -253,3 +343,38 @@ def generate_index_cache():
 
             index_cache[x][y] = x + 30 * y
     return index_cache
+
+def scoring(initial_spaces, new_spaces, list_players, list_players_without_me, my_index):
+    '''
+    Define the score of the move depending of different factors
+    '''
+
+    is_ennemy_killed = False
+    delta_ennemy_space = 0
+    for player in list_players_without_me:
+        is_ennemy_killed = is_ennemy_killed or (initial_spaces[player] != 0 and new_spaces[player] == 0)
+
+        if initial_spaces[player] != 0:
+            delta_ennemy_space += (initial_spaces[player] - new_spaces[player])/initial_spaces[player]
+
+    delta_conflict_space = 0
+    if initial_spaces[5] != 0:
+        delta_conflict_space = (initial_spaces[5] - new_spaces[5])/initial_spaces[5]
+
+    delta_my_space = 0
+    if initial_spaces[my_index] != 0:
+        delta_my_space = (new_spaces[my_index] - initial_spaces[my_index])/initial_spaces[my_index]
+
+    bonus = 0
+    if is_ennemy_killed:
+        bonus += 3
+
+    #Maximise my space
+    #Minimize ennemy space
+    #Bonus is great !
+    if new_spaces[my_index] == 0:
+        return -inf
+    else:
+        score = delta_my_space * 3.0 + delta_ennemy_space + delta_conflict_space * 0.5 + bonus
+    return score
+

@@ -3,9 +3,9 @@ from math import sqrt, log, inf
 from random import randint
 from time import clock
 from Bot import Bot
-from Utils import compute_path, detect_articulation_points, compute_tree_of_chambers, compute_voronoi, generate_index_cache, generate_manhattan_cache
+from Utils import compute_path, detect_articulation_points, compute_tree_of_chambers, compute_voronoi, generate_index_cache, generate_manhattan_cache, compute_tree_of_chambers_AP, scoring
 
-class ExplicitBot(Bot):
+class OptimExplicitBot(Bot):
     def __init__(self):
         self.current_move = {}
         self.wall_cycles = {}
@@ -68,6 +68,37 @@ class ExplicitBot(Bot):
                     self.list_players.remove(i)
                     self.list_players_without_me.remove(i)
 
+        #Initial state evaluation
+        init_voronoi_area, init_voronoi_spaces = compute_voronoi(self.area, self.current_move, self.list_players, self.index_cache)
+
+        init_previous_pos = {}
+        for player in self.list_players:
+            if len(self.wall_cycles[player]) < 2:
+                init_previous_pos[player] = (-1,-1)
+            else:
+                init_previous_pos[player] = self.wall_cycles[player][-2]
+
+        init_articulation_points = {}  # Another solution is to detect which players are separated from each other with A*..
+        init_availables_spaces = {}
+        for player in self.list_players:
+            init_articulation_points[player] = detect_articulation_points(self.area, self.current_move[player],
+                                                                     self.index_cache[self.current_move[player][0]][
+                                                                         self.current_move[player][1]], self.index_cache)
+
+            if len(init_articulation_points[player]) == 0:
+                init_availables_spaces[player] = init_voronoi_spaces[player]
+            else:
+                init_availables_spaces[player] = compute_tree_of_chambers_AP(self.area, init_voronoi_area,
+                                                                             init_articulation_points[player], self.current_move[player],
+                                                                             init_previous_pos, self.index_cache, player)
+        init_availables_spaces[5] = init_voronoi_spaces[5]
+
+        init_ennemies_space = 0
+        for player in self.list_players_without_me:
+            init_ennemies_space += init_availables_spaces[player]
+        init_ennemies_space += init_voronoi_spaces[5]
+
+        #Evaluation of the different possibles moves
         offsets = [[1, 0], [-1, 0], [0, 1], [0, -1]]
         cur_pos = self.current_move[my_index]
 
@@ -77,9 +108,8 @@ class ExplicitBot(Bot):
             new_pos[player] = self.current_move[player]
             previous_pos[player] = self.wall_cycles[player][-1]
 
-        max_space = 0
+        max_evaluation = -inf
         max_new_direction = (0,0)
-        min_ennemies_space = inf
 
         for off_x, off_y in offsets:
             new_x = cur_pos[0] + off_x
@@ -99,19 +129,23 @@ class ExplicitBot(Bot):
                     if len(articulation_points[player]) == 0:
                         availables_spaces[player] = voronoi_spaces[player]
                     else:
-                        availables_spaces[player] = compute_tree_of_chambers(self.area, voronoi_area, articulation_points[player], new_pos[player], previous_pos, self.index_cache, my_index)
+                        availables_spaces[player] = compute_tree_of_chambers_AP(self.area, voronoi_area, articulation_points[player], new_pos[player], previous_pos, self.index_cache, player)
+                availables_spaces[5] = voronoi_spaces[5]
 
                 ennemies_space = 0
-                max_ennemi_space = 0
                 for player in self.list_players_without_me:
-                    if availables_spaces[player] > max_ennemi_space :
-                        max_ennemi_space = availables_spaces[player]
-                    #ennemies_space += availables_spaces[player]
-                ennemies_space = max_ennemi_space
-                #ennemies_space += voronoi_spaces[5]
+                    ennemies_space += availables_spaces[player]
+                ennemies_space += voronoi_spaces[5]
 
-                print('player-' + str(my_index) + ' cur:' + str((cur_pos[0],cur_pos[1])) + ', new:' + str((new_x,new_y)) + ': ' + str(availables_spaces[my_index]) + '/' + str(ennemies_space) + ', ' + str(voronoi_spaces), flush=True)
+                evaluation = scoring(init_availables_spaces, availables_spaces, self.list_players, self.list_players_without_me, my_index)
 
+                print('player' + str(my_index) + ' cur:' + str((cur_pos[0],cur_pos[1])) + ' =>' + str((new_x,new_y)) + ': init:' + str(init_availables_spaces[my_index]) + '/' + str(init_ennemies_space) + ', new: ' + str(availables_spaces[my_index]) + '/' + str(ennemies_space) + ', score: ' + str(evaluation ) + ', ' + str(voronoi_spaces), flush=True)
+
+                if evaluation > max_evaluation:
+                    max_evaluation = evaluation
+                    max_new_direction = (new_x, new_y)
+
+                '''
                 #First maximise my own space
                 if availables_spaces[my_index] > max_space:
                     max_space = availables_spaces[my_index]
@@ -123,6 +157,9 @@ class ExplicitBot(Bot):
                     if ennemies_space < min_ennemies_space:
                         min_ennemies_space = ennemies_space
                         max_new_direction = (new_x, new_y)
+                '''
+
+        print('player' + str(my_index) + ' cur:' + str((cur_pos[0], cur_pos[1])) + ' =>' + str((max_new_direction[0], max_new_direction[1])), flush=True)
 
         if max_new_direction != (0, 0):
             self.opposite_direction = (max_new_direction[0] * -1, max_new_direction[1] * -1)

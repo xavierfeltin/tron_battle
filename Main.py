@@ -3,9 +3,9 @@ import gc
 from GameFrame import GameFrame
 from GameEngine import GameEngine
 from RandomBot import RandomBot
-#from ExplicitBot import ExplicitBot
+from ExplicitBot import ExplicitBot
 #from MCTSBot import MCTSBot
-from ExplicitBot_optimized import ExplicitBot
+from ExplicitBot_optimized import OptimExplicitBot
 from MCTSBot_optimized import MCTSBot
 from MinimaxBot import MinimaxBot
 from time import sleep
@@ -32,7 +32,7 @@ if __name__ == "__main__":
     engine = GameEngine(NB_PLAYERS)
 
     players = []
-    players.append(ExplicitBot())
+    players.append(OptimExplicitBot())
     for i in range(NB_PLAYERS-1):
         players.append(ExplicitBot())
 
