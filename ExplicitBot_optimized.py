@@ -3,7 +3,7 @@ from math import sqrt, log, inf
 from random import randint
 from time import clock
 from Bot import Bot
-from Utils import compute_path, detect_articulation_points, compute_tree_of_chambers, compute_voronoi, generate_index_cache, generate_manhattan_cache, compute_tree_of_chambers_AP, scoring
+from Utils import compute_path, detect_articulation_points, compute_tree_of_chambers, compute_voronoi, generate_index_cache, generate_manhattan_cache, scoring
 
 class OptimExplicitBot(Bot):
     def __init__(self):
@@ -71,6 +71,13 @@ class OptimExplicitBot(Bot):
         #Initial state evaluation
         init_voronoi_area, init_voronoi_spaces = compute_voronoi(self.area, self.current_move, self.list_players, self.index_cache)
 
+        init_dist_from_me = {}
+        r_index = self.index_cache[self.current_move[my_index][0]][self.current_move[my_index][1]]
+        for player in self.list_players_without_me:
+            g_index = self.index_cache[self.current_move[player][0]][self.current_move[player][1]]
+            init_dist_from_me[player] = compute_path(self.area, self.current_move[my_index], r_index, self.current_move[player],
+                                                     g_index, self.manhattan_cache, self.index_cache)
+
         init_previous_pos = {}
         for player in self.list_players:
             if len(self.wall_cycles[player]) < 2:
@@ -88,7 +95,7 @@ class OptimExplicitBot(Bot):
             if len(init_articulation_points[player]) == 0:
                 init_availables_spaces[player] = init_voronoi_spaces[player]
             else:
-                init_availables_spaces[player] = compute_tree_of_chambers_AP(self.area, init_voronoi_area,
+                init_availables_spaces[player] = compute_tree_of_chambers(self.area, init_voronoi_area,
                                                                              init_articulation_points[player], self.current_move[player],
                                                                              init_previous_pos, self.index_cache, player)
         init_availables_spaces[5] = init_voronoi_spaces[5]
@@ -123,13 +130,19 @@ class OptimExplicitBot(Bot):
 
                 articulation_points = {} #Another solution is to detect which players are separated from each other with A*..
                 availables_spaces = {}
+                dist_from_me = {}
+                r_index = self.index_cache[new_pos[my_index][0]][new_pos[my_index][1]]
                 for player in self.list_players:
+                    g_index = self.index_cache[new_pos[player][0]][new_pos[player][1]]
+                    dist_from_me[player] = compute_path(self.area, new_pos[my_index], r_index, new_pos[player], g_index,
+                                                        self.manhattan_cache, self.index_cache)
+
                     articulation_points[player] = detect_articulation_points(self.area, new_pos[player], self.index_cache[new_pos[player][0]][new_pos[player][1]], self.index_cache)
 
                     if len(articulation_points[player]) == 0:
                         availables_spaces[player] = voronoi_spaces[player]
                     else:
-                        availables_spaces[player] = compute_tree_of_chambers_AP(self.area, voronoi_area, articulation_points[player], new_pos[player], previous_pos, self.index_cache, player)
+                        availables_spaces[player] = compute_tree_of_chambers(self.area, voronoi_area, articulation_points[player], new_pos[player], previous_pos, self.index_cache, player)
                 availables_spaces[5] = voronoi_spaces[5]
 
                 ennemies_space = 0
@@ -137,7 +150,8 @@ class OptimExplicitBot(Bot):
                     ennemies_space += availables_spaces[player]
                 ennemies_space += voronoi_spaces[5]
 
-                evaluation = scoring(init_availables_spaces, availables_spaces, self.list_players, self.list_players_without_me, my_index)
+                evaluation = scoring(init_availables_spaces, availables_spaces, self.list_players, self.list_players_without_me, my_index,
+                                     init_articulation_points, articulation_points, init_dist_from_me, dist_from_me)
 
                 print('player' + str(my_index) + ' cur:' + str((cur_pos[0],cur_pos[1])) + ' =>' + str((new_x,new_y)) + ': init:' + str(init_availables_spaces[my_index]) + '/' + str(init_ennemies_space) + ', new: ' + str(availables_spaces[my_index]) + '/' + str(ennemies_space) + ', score: ' + str(evaluation ) + ', ' + str(voronoi_spaces), flush=True)
 
