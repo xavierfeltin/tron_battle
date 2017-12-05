@@ -54,6 +54,115 @@ class Individual:
                 self.score += stat.turn_of_death / stat.game_turns #more turns before death is better
         self.score = self.score / len(self.statistics)
 
+    def clone(self):
+        clone = Individual(self.coefficients[:])
+        return clone
+
+    @staticmethod
+    def get_actual_coefficients():
+        '''
+        Actual solution in codingame
+        '''
+        return [0.3, 0.1, 0.04, 0.3, 0, 0.0007, 0.1]
+
+    def generate_individual_from_reference(self, reference_individual):
+        '''
+        Create a new solution from an existing solution by making mutation on it
+        @is_first_generation: True generate all moves, False delete first move and generate last one
+        @return None
+        '''
+
+        if is_first_generation:
+            for i in range(NB_MOVES):
+                move = reference_solution.moves1[i].clone()
+                move.mutate(uniform(COEFFICIENT_MIN_MUTATION_FROM_REF, COEFFICIENT_MAX_MUTATION_FROM_REF), cho)
+                self.moves1.append(move)
+
+                move = reference_solution.moves2[i].clone()
+                move.mutate(uniform(COEFFICIENT_MIN_MUTATION_FROM_REF, COEFFICIENT_MAX_MUTATION_FROM_REF), gall)
+                self.moves2.append(move)
+
+            self.validate()
+        else:
+            move = reference_solution.moves1[NB_MOVES - 1].clone()
+            move.mutate(uniform(COEFFICIENT_MIN_MUTATION_FROM_REF, COEFFICIENT_MAX_MUTATION_FROM_REF), cho)
+            self.moves1.popleft()
+            self.moves1.append(move)
+
+            move = reference_solution.moves2[NB_MOVES - 1].clone()
+            move.mutate(uniform(COEFFICIENT_MIN_MUTATION_FROM_REF, COEFFICIENT_MAX_MUTATION_FROM_REF), gall)
+            self.moves2.popleft()
+            self.moves2.append(move)
+
+        self.validate()
+
+    def mutate(self, amplitude, is_apocalypse=False):
+
+        if race_turn > 2 and not is_apocalypse:
+            for i in reversed(range(NB_MOVES_TO_MUTATE)):
+                self.moves1[NB_MOVES - 1 - i].mutate(amplitude, cho)
+                self.moves2[NB_MOVES - 1 - i].mutate(amplitude, gall)
+        else:
+            for i in range(NB_MOVES):
+                self.moves1[i].mutate(amplitude, cho)
+                self.moves2[i].mutate(amplitude, gall)
+
+        self.validate()
+
+    def mutate(self, amplitude, pod):
+        ramin = self.angle - 36.0 * amplitude
+        ramax = self.angle + 36.0 * amplitude
+
+        if ramin < -18.0:
+            ramin = -18.0
+
+        if ramax > 18.0:
+            ramax = 18.0
+
+        self.angle = uniform(ramin, ramax)
+
+        self.shield = pod.shield_ready and randint(0, 100) < SHIELD_CHANCE
+        self.boost = pod.boost_available and not self.shield and randint(0, 100) < BOOST_CHANCE
+
+        pmin = self.thrust - 100 * amplitude
+        pmax = self.thrust + 200 * amplitude
+
+        if pmin < MIN_THRUST:
+            pmin = MIN_THRUST
+        elif pmin > 100:
+            pmin = 100
+
+        if pmax > 100:
+            pmax = 100
+        elif pmax < MIN_THRUST:
+            pmax = MIN_THRUST
+
+        if pmin <= pmax:
+            self.thrust = uniform(pmin, pmax)
+        else:
+            self.thrust = uniform(pmin, pmax)
+
+    @staticmethod
+    def cross(p1_move, p2_move, pod):
+        proba = randint(0, 100)
+
+        if proba < 50:
+            thrust = (0.7 * p1_move.thrust) + (0.3 * p2_move.thrust)
+            move = Move((0.7 * p1_move.angle) + (0.3 * p2_move.angle), thrust)
+
+        else:
+            thrust = (0.7 * p2_move.thrust) + (0.3 * p1_move.thrust)
+            move = Move((0.7 * p2_move.angle) + (0.3 * p1_move.angle), thrust)
+
+        if p1_move.shield and p2_move.shield and randint(0, 100) < SHIELD_CHANCE and pod.shield_ready:
+            move.shield = True
+
+        if p1_move.boost and p2_move.boost and randint(0,
+                                                       100) < BOOST_CHANCE and pod.boost_available and not move.shield:
+            move.boost = True
+
+        return move
+
 
 class Solver:
     def __init__(self, game, bots):
@@ -108,6 +217,8 @@ class AG:
         :return: the best estimated coefficients
         '''
 
+        self.__generate_population(True)
+
         while self.index_generation <= self.min_evaluations and abs(self.best_score - self.previous_score) > 0.1:
             self.__solve()
 
@@ -129,7 +240,7 @@ class AG:
                 bots = []
                 for i in range(game.nb_players):
                     if i == game.my_position:
-                        p_ag_parameters = [3, 1, 0.4, 3, 0, 0.007, 1]
+                        p_ag_parameters = individual.coefficients
                         bots.append(AGExplicitBot(*p_ag_parameters))
                     else:
                         bots.append(OptimExplicitBot())
@@ -148,8 +259,12 @@ class AG:
         Sort the population by score
         :return: None
         '''
+        self.maximum = -inf
+        self.average = 0.0
+
         for individual in self.population:
             individual.score()
+            self.update_avg_max(individual.score)
 
         self.population.sort(key=attrgetter('score'), reverse=True)
 
@@ -169,9 +284,9 @@ class AG:
             for j in range(self.nb_tournament_contestants):
                 index_opponent = randint(0, self.population_size - 1)
 
-                if self.solutions[index_opponent].score > winner.score:
+                if self.population[index_opponent].score > winner.score:
                     index_winner = index_opponent
-                    winner = self.solutions[index_opponent]
+                    winner = self.population[index_opponent]
 
             if winner.score> maximum_score:
                 maximum_score = winner.score
@@ -180,8 +295,8 @@ class AG:
         return maximum_score
 
     def crossing_mutation_single(self):
-        parent_1 = self.solutions[self.parents[randint(0, self.nb_tournament)]]
-        parent_2 = self.solutions[self.parents[randint(0, self.nb_tournament)]]
+        parent_1 = self.population[self.parents[randint(0, self.nb_tournament)]]
+        parent_2 = self.population[self.parents[randint(0, self.nb_tournament)]]
 
         #TODO: to adapt to Tron
         child = Individual()
@@ -204,28 +319,28 @@ class AG:
         new_average = 0.0
         nb_children = 0
 
-        self.solutions.append(self.solutions[0].clone())
+        self.population.append(self.get_best_solution().clone())
 
         for i in range(self.population_size):
 
-            solution = self.solutions[i]
+            individual = self.population[i]
             if self.apocalypse < self.apocalypse_threshold:
-                mutation_probability = self.compute_probability_mutation(solution.score)
+                mutation_probability = self.compute_probability_mutation(individual.score)
 
                 if uniform(0.0, 1.0) <= mutation_probability:
-                    solution.mutate(mutation_probability)
-                    solution.score()
-                    new_average += solution.score
+                    individual.mutate(mutation_probability)
+                    individual.score()
+                    new_average += individual.score
             else:
-                solution.mutate(self.apocalypse_mutation_factor, True)
-                solution.score()
-                new_average += solution.score
+                individual.mutate(self.apocalypse_mutation_factor, True)
+                individual.score()
+                new_average += individual.score
 
             child = None
             if uniform(0.0, 1.0) <= crossing_probability:  # and nb_children <= MAX_NB_CHILDREN:
                 child = self.crossing_mutation_single()
                 child.score()
-                self.solutions.append(child)
+                self.population.append(child)
                 new_average += child.score
                 nb_children += 1
 
@@ -259,9 +374,9 @@ class AG:
             return self.K4
 
     def get_best_solution(self):
-        return self.solutions[0]
+        return self.population[0]
 
-    def generate_population(self, is_first_generation):
+    def generate_initial_population(self):
         '''
         Generate the population of solutions
         The populations is sorted with the best solution first
@@ -269,32 +384,12 @@ class AG:
         @return: None
         '''
 
-        self.maximum = -inf
-        self.average = 0.0
-
         #TODO: adapt to Tron
 
-        if is_first_generation:
-            reference_solution = Individual()
-            reference_solution.generate_deterministic_solution(True)
-            reference_solution.score()
-            self.population.append(reference_solution)
-            self.update_avg_max(reference_solution.score)
+        ref_individual = Individual(Individual.get_actual_coefficients())
+        self.population.append(ref_individual)
 
-            for i in range(self.population_size - 1):
-                solution = Individual()
-                solution.generate_solution_from_reference(reference_solution, True)
-                solution.score()
-                self.population.append(solution)
-                self.update_avg_max(solution.score)
-        else:
-            self.population[0].generate_deterministic_solution(False)
-            self.population[0].score()
-            self.update_avg_max(self.population[0].score)
-
-            for i in range(1, self.population_size - 1):
-                self.population[i + 1].generate_solution_from_reference(self.population[0], False)
-                self.population[i + 1].score()
-                self.update_avg_max(self.population[i + 1].score)
-
-        self.population.sort(key=attrgetter('score'), reverse=True)
+        for i in range(self.population_size - 1):
+            individual = Individual()
+            individual.generate_individual_from_reference(ref_individual)
+            self.population.append(individual)
