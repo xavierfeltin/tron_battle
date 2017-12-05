@@ -2,9 +2,29 @@ import Configuration
 from random import randint
 from numpy import ones, zeros
 from time import clock
+from math import inf
+
+
+class Statistics:
+    def __init__(self, nb_players):
+        self.nb_players = nb_players
+        self.turn_of_death = inf
+        self.players_killed_before = 0
+        self.game_turns = 0
+
+    def update(self, is_game_over, remaining_players):
+        self.game_turns += 1
+
+        if is_game_over:
+            self.turn_of_death = self.game_turns
+            remaining_players += 1 #Do not take into account player when counting deads
+
+        if not is_game_over and remaining_players < self.nb_players:
+            self.players_killed_before = self.nb_players - remaining_players
 
 class GameEngine:
-    def __init__(self, nb_players):
+
+    def __init__(self, nb_players = 0):
         self.nb_players = nb_players
         self.cycles_positions = []
         self.initial_cycles_positions = []
@@ -13,14 +33,31 @@ class GameEngine:
         self.players_game_over = []
         self.players = []
         self.walls = {}
+        self.statistics = Statistics(nb_players)
+
+    def load_configuration(self, configuration, bots):
+        '''
+        Set the game depending of the configuration and the bots given in paramters
+        :param configuration: GameConfiguration
+        :param bots: list of Bots
+        :return: None
+        '''
+        self.nb_players = configuration.nb_players
+        self.current_nb_players = configuration.nb_players
+        self.statistics = Statistics(configuration.nb_players)
+
+        for i in range(configuration.nb_players):
+            x = configuration.starting_positions[i][0]
+            y = configuration.starting_positions[i][1]
+
+            self.cycles_positions.append((x, y))
+            self.initial_cycles_positions.append((x, y))
+            self.players_game_over.append(False)
+            self.players.append(bots[i])
+            self.walls[i] = [(x, y)]
 
     def initialize(self, players):
         for i in range(self.nb_players):
-            #x,y = -1,-1
-            #while (x,y) in self.cycles_positions or (x == -1 and y == -1):
-            #    x = randint(0, Configuration.MAX_X_GRID)
-            #    y = randint(0, Configuration.MAX_Y_GRID)
-
             x = Configuration.START_POSITIONS[i][0]
             y = Configuration.START_POSITIONS[i][1]
 
@@ -71,6 +108,15 @@ class GameEngine:
                     #Free space
                     for wall in self.walls[i]:
                         self.area[wall[0], wall[1]] = True
+
+        self.statistics.update(is_game_over, self.current_nb_players)
+
+    def get_statistics(self):
+        '''
+        :return: statistics on the game
+        '''
+
+        return self.statistics
 
     def is_game_playing(self):
         return self.current_nb_players > 1
