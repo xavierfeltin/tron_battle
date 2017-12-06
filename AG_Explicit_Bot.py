@@ -225,13 +225,13 @@ class AGExplicitBot(OptimExplicitBot):
                 evaluation = self.scoring(init_availables_spaces, availables_spaces, self.list_players, self.list_players_without_me, my_index,
                                      init_articulation_points, articulation_points, init_dist_from_me, dist_from_me, new_pos, init_dist_from_me, dist_from_me)
 
-                print('player' + str(my_index) + ' cur:' + str((cur_pos[0],cur_pos[1])) + ' =>' + str((new_x,new_y)) + ': init:' + str(init_availables_spaces[my_index]) + '/' + str(init_ennemies_space) + ', new: ' + str(availables_spaces[my_index]) + '/' + str(ennemies_space) + ', score: ' + str(evaluation ) + ', ' + str(voronoi_spaces), flush=True)
+                #print('player' + str(my_index) + ' cur:' + str((cur_pos[0],cur_pos[1])) + ' =>' + str((new_x,new_y)) + ': init:' + str(init_availables_spaces[my_index]) + '/' + str(init_ennemies_space) + ', new: ' + str(availables_spaces[my_index]) + '/' + str(ennemies_space) + ', score: ' + str(evaluation ) + ', ' + str(voronoi_spaces), flush=True)
 
                 if evaluation > max_evaluation:
                     max_evaluation = evaluation
                     max_new_direction = (new_x, new_y)
 
-        print('player' + str(my_index) + ' cur:' + str((cur_pos[0], cur_pos[1])) + ' =>' + str((max_new_direction[0], max_new_direction[1])), flush=True)
+        #print('player' + str(my_index) + ' cur:' + str((cur_pos[0], cur_pos[1])) + ' =>' + str((max_new_direction[0], max_new_direction[1])), flush=True)
 
         if max_new_direction != (0, 0):
             self.opposite_direction = (max_new_direction[0] * -1, max_new_direction[1] * -1)

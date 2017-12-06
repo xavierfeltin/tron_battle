@@ -15,7 +15,7 @@ class Statistics:
     def update(self, is_game_over, remaining_players):
         self.game_turns += 1
 
-        if is_game_over:
+        if is_game_over and self.turn_of_death == inf:
             self.turn_of_death = self.game_turns
             remaining_players += 1 #Do not take into account player when counting deads
 
@@ -33,7 +33,7 @@ class GameEngine:
         self.players_game_over = []
         self.players = []
         self.walls = {}
-        self.statistics = Statistics(nb_players)
+        self.statistics = {}
 
     def load_configuration(self, configuration, bots):
         '''
@@ -44,7 +44,6 @@ class GameEngine:
         '''
         self.nb_players = configuration.nb_players
         self.current_nb_players = configuration.nb_players
-        self.statistics = Statistics(configuration.nb_players)
 
         for i in range(configuration.nb_players):
             x = configuration.starting_positions[i][0]
@@ -55,6 +54,8 @@ class GameEngine:
             self.players_game_over.append(False)
             self.players.append(bots[i])
             self.walls[i] = [(x, y)]
+
+            self.statistics[i] = Statistics(configuration.nb_players)
 
     def initialize(self, players):
         for i in range(self.nb_players):
@@ -85,7 +86,7 @@ class GameEngine:
 
                 start = clock()
                 direction = self.players[i].compute_direction(input)
-                print(str(i) + ': ' + str(round((clock() - start)*1000,2)) + 'ms', flush=True)
+                #print(str(i) + ': ' + str(round((clock() - start)*1000,2)) + 'ms', flush=True)
 
                 if direction == 'LEFT': new_x -= 1
                 elif direction == 'RIGHT': new_x += 1
@@ -109,7 +110,7 @@ class GameEngine:
                     for wall in self.walls[i]:
                         self.area[wall[0], wall[1]] = True
 
-        self.statistics.update(is_game_over, self.current_nb_players)
+            self.statistics[i].update(self.players_game_over[i], self.current_nb_players)
 
     def get_statistics(self):
         '''
