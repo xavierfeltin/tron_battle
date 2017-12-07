@@ -121,18 +121,17 @@ class Solver:
         return self.engine.get_statistics()
 
 class ComputeGame(Thread):
-    def __init__(self, games, game_bots, individual, index_generation):
+    def __init__(self, games, game_bots, individual):
         Thread.__init__(self)
         self.games = games
         self.game_bots = game_bots
         self.individual = individual
-        self.index = index_generation
 
     def run(self):
         for index_game, game in enumerate(self.games):
             solver = Solver(game, self.game_bots[index_game])
             game_statistics = solver.solve()
-            self.individual.add_statistics( self.index, game_statistics[solver.game.my_position])
+            self.individual.add_statistics(index_game, game_statistics[solver.game.my_position])
 
 class AG:
     def __init__(self, population_size = 50, nb_games = 100, min_evaluations = 100, nb_tournament = 30, nb_tournament_contestants= 2, apocalypse_threshold = inf, apocalypse_mutation_factor = 0.5):
@@ -171,9 +170,10 @@ class AG:
         :return: the best estimated coefficients
         '''
 
-        while self.index_generation <= self.min_evaluations or abs(self.best_score - self.previous_score) > 0.01:
-            print('Generation ' + str(self.index_generation))
+        file = open("log_coefficients.txt", "w")
 
+        while (self.index_generation <= self.min_evaluations or abs(self.best_score - self.previous_score) > 0.01) and self.index_generation < 500:
+            print('Generation ' + str(self.index_generation))
             if self.index_generation == 0:
                 self.generate_initial_population()
             else:
@@ -187,6 +187,9 @@ class AG:
 
             self.index_generation += 1
             print('best generation score: ' + str(self.best_score) + ', reference score: ' + str(self.reference_individual.score), flush=True)
+            file.write('\n Generation: ' + str(self.index_generation) + ', best generation score: ' + str(self.best_score) + ', reference score: ' + str(self.reference_individual.score) + ', coefficients: ' + str(self.get_best_solution().coefficients))
+            file.flush()
+        file.close()
 
         return self.get_best_solution().coefficients
 
@@ -197,11 +200,15 @@ class AG:
         '''
 
         games = GameConfiguration.create_games(self.nb_games)
+        threads = []
 
-        for index_ind, individual in enumerate(self.population):
-            print('Evaluating indiv ' + str(index_ind), flush=True)
-            threads = []
+        candidates = []
+        candidates.extend(self.population)
 
+        self.reference_individual = Individual(Individual.get_actual_coefficients())
+        candidates.append(self.reference_individual)
+
+        for index_ind, individual in enumerate(candidates):
             game_bots = {}
             for index_game, game in enumerate(games):
                 bots = []
@@ -213,29 +220,15 @@ class AG:
                         bots.append(OptimExplicitBot())
                 game_bots[index_game] = bots
 
-            threads.append(ComputeGame(games, game_bots, individual, index_game))
+            threads.append(ComputeGame(games, game_bots, individual))
 
         for thread in threads:
             thread.start()
 
-        for thread in threads:
-            thread.join()
-
-        print('    Evaluating Reference', flush=True)
-        self.reference_individual = Individual(Individual.get_actual_coefficients())
-        for index_game, game in enumerate(games):
-            bots = []
-            for i in range(game.nb_players):
-                if i == game.my_position:
-                    p_ag_parameters = self.reference_individual.coefficients
-                    bots.append(AGExplicitBot(*p_ag_parameters))
-                else:
-                    bots.append(OptimExplicitBot())
-
-            solver = Solver(game, bots)
-            game_statistics = solver.solve()
-
-            self.reference_individual.add_statistics(index_game, game_statistics[solver.game.my_position])
+        while threads:
+            for index, thread in enumerate(threads):
+                thread.join(0.04) #40ms
+                if not thread.is_alive(): threads.remove(thread)
 
     def __evaluate(self):
         '''
@@ -312,6 +305,10 @@ class AG:
                 child = self.crossing_mutation_single()
                 self.population.append(child)
                 nb_children += 1
+
+        for individual in self.population:
+            individual.statistics = {}
+            individual.score = 0
 
         '''
         if self.population[0].score > self.maximum:
