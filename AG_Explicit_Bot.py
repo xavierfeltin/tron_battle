@@ -45,7 +45,7 @@ class AGExplicitBot(Bot):
         for player in p_list_players_without_me:
             # is_ennemy_killed = is_ennemy_killed or (initial_spaces[player] != 0 and new_spaces[player] == 0)
 
-            if init_dist_from_me[player] is not None and dist_from_me[player] is not None:
+            if init_dist_from_me[player] is not None and init_dist_from_me[player] != 0 and dist_from_me[player] is not None:
                delta_distance = (init_dist_from_me[player] - dist_from_me[player])/init_dist_from_me[player]
             else:
                 nb_separeted += 1
