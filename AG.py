@@ -4,6 +4,7 @@ from time import clock
 from operator import attrgetter
 from threading import Thread
 from collections import deque
+from multiprocessing import Queue
 
 from AG_Explicit_Bot import AGExplicitBot
 from ExplicitBot_optimized import OptimExplicitBot
@@ -46,13 +47,13 @@ class Individual:
     def __init__(self, p_coefficients):
         self.coefficients = p_coefficients
         self.score = 0
-        self.statistics = {}
+        self.statistics = []
 
-    def add_statistics(self, index_game, statistic):
-        self.statistics[index_game] = statistic
+    def add_statistics(self, statistic):
+        self.statistics.append(statistic)
 
     def evaluate(self):
-        for index, stat in self.statistics.items():
+        for stat in self.statistics:
             if stat.turn_of_death == inf: #player wins
                 self.score += 1
             else:
@@ -123,19 +124,21 @@ class Solver:
         return self.engine.get_statistics()
 
 class ComputeGame(Thread):
-    def __init__(self, games, game_bots, individual):
+    def __init__(self, game, game_bots, index, result_queue):
         Thread.__init__(self)
-        self.games = games
+        self.game = game
         self.game_bots = game_bots
-        self.individual = individual
+        self.individual = index
+        self.queue = result_queue
 
     def run(self):
         print('Start thread', flush=True)
         start = clock()
-        for index_game, game in enumerate(self.games):
-            solver = Solver(game, self.game_bots[index_game])
-            game_statistics = solver.solve()
-            self.individual.add_statistics(index_game, game_statistics[solver.game.my_position])
+
+        solver = Solver(self.game, self.game_bots)
+        game_statistics = solver.solve()
+        self.queue.put([self.individual, solver.game.my_position, game_statistics])
+            #self.individual.add_statistics(index_game, game_statistics[solver.game.my_position])
         print('End thread: ' + str((clock()-start)*1000), flush=True)
 
 class AG:
@@ -162,12 +165,15 @@ class AG:
 
         self.reference_individual = None
         self.population = [] #ordered by score
+        self.to_evaluate = []
         self.parents = []
         self.children = []  #used only for the preselection approach
 
         self.average = 0.0
         self.maximum = 0.0
         self.apocalypse = 0
+
+        self.games = GameConfiguration.create_games(self.nb_games)
 
     def run(self):
         '''
@@ -212,27 +218,22 @@ class AG:
         start = clock()
         print('Start building threads', flush=True)
 
-        games = GameConfiguration.create_games(self.nb_games)
         threads = []
-
-        candidates = []
-        candidates.extend(self.population)
+        result_queue = Queue()
 
         self.reference_individual = Individual(Individual.get_actual_coefficients())
-        candidates.append(self.reference_individual)
+        self.to_evaluate.append(self.reference_individual)
 
-        for individual in candidates:
-            game_bots = {}
-            for index_game, game in enumerate(games):
+        for index, individual in enumerate(self.to_evaluate):
+            for game in self.games:
                 bots = deque()
                 for i in range(game.nb_players):
                     if i == game.my_position:
                         bots.append(AGExplicitBot(*individual.coefficients, self.manhattan_cache, self.index_cache))
                     else:
                         bots.append(OptimExplicitBot(self.manhattan_cache, self.index_cache))
-                game_bots[index_game] = bots
 
-            threads.append(ComputeGame(games, game_bots, individual))
+                threads.append(ComputeGame(game, bots, index, result_queue))
 
         print('Build threads time; ' + str((clock()-start)*1000), flush=True)
 
@@ -251,7 +252,12 @@ class AG:
                 if not thread.is_alive():
                     running_threads.remove(thread)
                     nb_active_threads -= 1
-                    print('  ' + str(len(threads)) + ' threads remaining', flush=True)
+                    print('  ' + str(len(threads)) + ' games remaining', flush=True)
+
+        while not result_queue.empty():
+            result = result_queue.get()
+            index_indiv, index_player, stats = result
+            self.to_evaluate[index_indiv].add_statistics(stats[index_player])
 
     def __evaluate(self):
         '''
@@ -262,9 +268,11 @@ class AG:
         self.maximum = -inf
         self.average = 0.0
 
-        for individual in self.population:
+        for individual in self.to_evaluate:
             individual.evaluate()
             self.update_avg_max(individual.score)
+
+        self.population.extend(self.to_evaluate)
 
         self.population.sort(key=attrgetter('score'), reverse=True)
         self.population = self.population[0:self.population_size]
@@ -305,32 +313,37 @@ class AG:
         return Individual.cross(parent_1, parent_2)
 
     def build_generation_proba(self):
+        self.to_evaluate.clear()
 
         maximum_parent = self.__tournament()
         crossing_probability = self.compute_probability_crossing(maximum_parent)
         new_average = 0.0
         nb_children = 0
 
-        self.population.append(self.get_best_solution().clone())
+        #self.population.append(self.get_best_solution().clone())
 
         for i in range(self.population_size):
-
             individual = self.population[i]
             if self.apocalypse < self.apocalypse_threshold:
                 mutation_probability = self.compute_probability_mutation(individual.score)
 
                 if uniform(0.0, 1.0) <= mutation_probability:
-                    individual.mutate(mutation_probability)
+                    new_individual = individual.clone()
+                    new_individual.mutate(mutation_probability)
+                    self.to_evaluate.append(new_individual)
             else:
-                individual.mutate(self.apocalypse_mutation_factor, True)
+                new_individual = individual.clone()
+                new_individual.mutate(self.apocalypse_mutation_factor, True)
+                self.to_evaluate.append(new_individual)
 
             if uniform(0.0, 1.0) <= crossing_probability:
                 child = self.crossing_mutation_single()
-                self.population.append(child)
+                #self.population.append(child)
+                self.to_evaluate.append(child)
                 nb_children += 1
 
-        for individual in self.population:
-            individual.statistics = {}
+        for individual in self.to_evaluate:
+            individual.statistics.clear()
             individual.score = 0
 
         '''
@@ -369,7 +382,8 @@ class AG:
         @param is_first_generation: True if the generation is the really first one
         @return: None
         '''
-        ref_individual = Individual(Individual.get_actual_coefficients())
+        self.to_evaluate.clear()
 
+        ref_individual = Individual(Individual.get_actual_coefficients())
         for i in range(self.population_size):
-            self.population.append(Individual.generate_individual_from_reference(ref_individual))
+            self.to_evaluate.append(Individual.generate_individual_from_reference(ref_individual))
