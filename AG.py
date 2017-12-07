@@ -3,10 +3,12 @@ from math import inf
 from time import clock
 from operator import attrgetter
 from threading import Thread
+from collections import deque
 
 from AG_Explicit_Bot import AGExplicitBot
 from ExplicitBot_optimized import OptimExplicitBot
 from GameEngine import GameEngine
+from Utils import generate_index_cache, generate_manhattan_cache
 
 MAX_NB_PLAYERS = 4
 
@@ -128,10 +130,13 @@ class ComputeGame(Thread):
         self.individual = individual
 
     def run(self):
+        print('Start thread', flush=True)
+        start = clock()
         for index_game, game in enumerate(self.games):
             solver = Solver(game, self.game_bots[index_game])
             game_statistics = solver.solve()
             self.individual.add_statistics(index_game, game_statistics[solver.game.my_position])
+        print('End thread: ' + str((clock()-start)*1000), flush=True)
 
 class AG:
     def __init__(self, population_size = 50, nb_games = 100, min_evaluations = 100, nb_tournament = 30, nb_tournament_contestants= 2, apocalypse_threshold = inf, apocalypse_mutation_factor = 0.5):
@@ -172,12 +177,17 @@ class AG:
 
         file = open("log_coefficients.txt", "w")
 
+        self.manhattan_cache = generate_manhattan_cache()
+        self.index_cache = generate_index_cache()
+
         while (self.index_generation <= self.min_evaluations or abs(self.best_score - self.previous_score) > 0.01) and self.index_generation < 500:
             print('Generation ' + str(self.index_generation))
+            start = clock()
             if self.index_generation == 0:
                 self.generate_initial_population()
             else:
                 self.build_generation_proba()
+            print('Time build generation: ' + str((clock()-start)*1000), flush=True)
 
             self.__solve()
             self.__evaluate()
@@ -199,6 +209,9 @@ class AG:
         :return: None
         '''
 
+        start = clock()
+        print('Start building threads', flush=True)
+
         games = GameConfiguration.create_games(self.nb_games)
         threads = []
 
@@ -208,27 +221,37 @@ class AG:
         self.reference_individual = Individual(Individual.get_actual_coefficients())
         candidates.append(self.reference_individual)
 
-        for index_ind, individual in enumerate(candidates):
+        for individual in candidates:
             game_bots = {}
             for index_game, game in enumerate(games):
-                bots = []
+                bots = deque()
                 for i in range(game.nb_players):
                     if i == game.my_position:
-                        p_ag_parameters = individual.coefficients
-                        bots.append(AGExplicitBot(*p_ag_parameters))
+                        bots.append(AGExplicitBot(*individual.coefficients, self.manhattan_cache, self.index_cache))
                     else:
-                        bots.append(OptimExplicitBot())
+                        bots.append(OptimExplicitBot(self.manhattan_cache, self.index_cache))
                 game_bots[index_game] = bots
 
             threads.append(ComputeGame(games, game_bots, individual))
 
-        for thread in threads:
-            thread.start()
+        print('Build threads time; ' + str((clock()-start)*1000), flush=True)
 
-        while threads:
-            for index, thread in enumerate(threads):
-                thread.join(0.04) #40ms
-                if not thread.is_alive(): threads.remove(thread)
+        max_threads = 8
+        nb_active_threads = 0
+        running_threads = []
+        while len(threads) != 0 or len(running_threads) != 0:
+            if nb_active_threads < max_threads and len(threads) > 0:
+                new_thread = threads.pop(0)
+                running_threads.append(new_thread)
+                new_thread.start()
+                nb_active_threads += 1
+
+            for thread in running_threads:
+                thread.join(0.005) #5ms
+                if not thread.is_alive():
+                    running_threads.remove(thread)
+                    nb_active_threads -= 1
+                    print('  ' + str(len(threads)) + ' threads remaining', flush=True)
 
     def __evaluate(self):
         '''

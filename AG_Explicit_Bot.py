@@ -2,13 +2,23 @@ import sys
 from math import sqrt, log, inf
 from random import randint
 from time import clock
-from ExplicitBot_optimized import OptimExplicitBot
+from Bot import Bot
 from Utils import compute_path, detect_articulation_points, compute_tree_of_chambers, compute_voronoi, generate_index_cache, generate_manhattan_cache, scoring
 
-class AGExplicitBot(OptimExplicitBot):
-    def __init__(self, p_dms, p_des, p_dcs, p_kb, p_nbo, p_dd, p_dap):
+class AGExplicitBot(Bot):
+    def __init__(self, p_dms, p_des, p_dcs, p_kb, p_nbo, p_dd, p_dap, manhattan_cache, index_cache):
 
-        super().__init__()
+        self.current_move = {}
+        self.wall_cycles = {}
+        self.area = [True] * 600
+        self.list_players = []
+        self.list_players_without_me = []
+        self.turn = 0
+
+        self.previous_move = {}
+
+        self.manhattan_cache = manhattan_cache
+        self.index_cache = index_cache
 
         self.c_dms = p_dms  #Delta My Space
         self.c_des = p_des  # Delta Ennemies Space

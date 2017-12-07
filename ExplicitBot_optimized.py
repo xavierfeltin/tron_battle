@@ -6,7 +6,7 @@ from Bot import Bot
 from Utils import compute_path, detect_articulation_points, compute_tree_of_chambers, compute_voronoi, generate_index_cache, generate_manhattan_cache, scoring
 
 class OptimExplicitBot(Bot):
-    def __init__(self):
+    def __init__(self, manhattan_cache, index_cache):
         self.current_move = {}
         self.wall_cycles = {}
         self.area = [True] * 600
@@ -16,8 +16,8 @@ class OptimExplicitBot(Bot):
 
         self.previous_move = {}
 
-        self.manhattan_cache = generate_manhattan_cache()
-        self.index_cache = generate_index_cache()
+        self.manhattan_cache = manhattan_cache
+        self.index_cache = index_cache
 
     def compute_direction(self, input):
         splitted = input.split('\n')
